@@ -28,16 +28,31 @@ export function HomeClient() {
   const [loading, setLoading] = useState(true)
   const [signupAgreed, setSignupAgreed] = useState(false)
   const [showSignupTerms, setShowSignupTerms] = useState(false)
+  const [demoAvailable, setDemoAvailable] = useState(false)
+  const [demoBusy, setDemoBusy] = useState(false)
 
   const loadSession = useCallback(async () => {
-    const [legalRes, meRes] = await Promise.all([
+    const [legalRes, meRes, healthRes] = await Promise.all([
       apiFetch('/legal'),
       apiFetch('/auth/me'),
+      apiFetch('/health'),
     ])
     if (legalRes.ok) setLegal(await legalRes.json())
     if (meRes.ok) setUser(await meRes.json())
     else setUser(null)
+    // The demo entry point only appears when the API actually has DEMO_MODE on.
+    if (healthRes.ok) {
+      const health = (await healthRes.json()) as { checks?: { demoMode?: boolean } }
+      setDemoAvailable(Boolean(health.checks?.demoMode))
+    }
     setLoading(false)
+  }, [])
+
+  const enterDemo = useCallback(async () => {
+    setDemoBusy(true)
+    const res = await apiFetch('/auth/demo', { method: 'POST', body: '{}' })
+    if (res.ok) window.location.href = '/dashboard'
+    else setDemoBusy(false)
   }, [])
 
   const acceptTerms = useCallback(async () => {
@@ -88,8 +103,9 @@ export function HomeClient() {
         <div className="card">
           <p>Signed in as <strong>{user!.email}</strong></p>
           <p>
-            <strong>Phase 1 — foundation.</strong> Auth, schema, and the API are in place.
-            Metric tracking and the assistant come next.
+            <Link className="btn-primary" href="/dashboard">
+              Open the dashboard
+            </Link>
           </p>
           <button type="button" className="btn-secondary" onClick={() => void signOut()}>
             Sign out
@@ -123,6 +139,19 @@ export function HomeClient() {
           <p className="hint">
             You must review and accept our Terms before signing in.
           </p>
+        </div>
+      )}
+
+      {demoAvailable && !signedIn && (
+        <div className="card">
+          <strong>Explore with mock data</strong>
+          <p className="hint">
+            Signs you into a demo account preloaded with 90 days of generated readings — no
+            Google account needed. Clear it any time from Settings.
+          </p>
+          <button type="button" className="btn-secondary" onClick={() => void enterDemo()}>
+            {demoBusy ? 'Loading…' : 'Enter demo'}
+          </button>
         </div>
       )}
 

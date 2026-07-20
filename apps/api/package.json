@@ -10,9 +10,12 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/seed/cli.ts seed",
+    "db:reset": "tsx src/seed/cli.ts reset"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.2",
     "@fastify/session": "^11.0.2",

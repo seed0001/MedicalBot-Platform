@@ -3,10 +3,13 @@ import cors from '@fastify/cors'
 import session from '@fastify/session'
 import Fastify from 'fastify'
 import { config, isProduction, googleConfigured, openRouterConfigured } from './config.js'
-import { closeDb, pingDb } from './db/index.js'
+import { closeDb, pingDb, runMigrations, usingPglite } from './db/index.js'
 import { authRoutes } from './routes/auth.js'
+import { dashboardRoutes } from './routes/dashboard.js'
+import { demoRoutes } from './routes/demo.js'
 import { legalRoutes } from './routes/legal.js'
 import { metricRoutes } from './routes/metrics.js'
+import { recordRoutes } from './routes/records.js'
 
 const app = Fastify({
   logger: {
@@ -53,6 +56,8 @@ app.get('/health', async () => {
     status: dbOk ? 'ok' : 'degraded',
     checks: {
       database: dbOk,
+      driver: usingPglite ? 'pglite (embedded)' : 'postgres',
+      demoMode: config.DEMO_MODE,
       google: googleConfigured,
       openrouter: openRouterConfigured,
     },
@@ -61,7 +66,17 @@ app.get('/health', async () => {
 
 await app.register(authRoutes)
 await app.register(legalRoutes)
+await app.register(demoRoutes)
+await app.register(dashboardRoutes, { prefix: '/api' })
+await app.register(recordRoutes, { prefix: '/api' })
 await app.register(metricRoutes, { prefix: '/api' })
+
+// Embedded Postgres has no separate migrate step, so it self-migrates at boot.
+// Hosted Postgres runs migrations from the Railway deploy command instead.
+if (usingPglite) {
+  await runMigrations()
+  app.log.info('Embedded database ready')
+}
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, 'Shutting down')

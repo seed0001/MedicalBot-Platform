@@ -25,6 +25,12 @@ export const users = pgTable(
     // Terms acceptance — required before using the Service; re-prompt on version bump.
     termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
     termsVersion: text('terms_version'),
+    /**
+     * Marks seeded exploration accounts. Every other table cascades from users,
+     * so the master reset is a single delete on this flag — no per-row tagging
+     * and nothing left orphaned.
+     */
+    isDemo: boolean('is_demo').notNull().default(false),
   },
   (t) => [
     uniqueIndex('users_google_id_idx').on(t.googleId),

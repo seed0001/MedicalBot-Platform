@@ -20,6 +20,9 @@ coverage/
 .cache/
 *.tsbuildinfo
 
+# Embedded PGlite database files (local only)
+.data/
+
 # Never commit health data
 *.phi.json
 /exports/
