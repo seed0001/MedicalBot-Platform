@@ -1,20 +1,22 @@
 import type { ConditionModule } from './types.js'
 
 /**
- * Schizophrenia / schizoaffective. Deliberately the opposite shape from the
- * diabetes module: little numeric data, and the signal that matters is
- * adherence, sleep, and subjective state. Relapse is usually preceded by days
- * of degraded sleep and missed doses, which is exactly what this tracks.
+ * Schizophrenia / schizoaffective.
  *
- * Tone matters more here than anywhere else in the product. The module never
- * frames check-ins as surveillance, and never asks the user to litigate whether
- * their experiences are real.
+ * Same posture as the diabetes module: record the data, show the trends, leave
+ * the conclusions to the user and their prescriber. Sleep, mood, and side
+ * effects are the things that are hard to reconstruct accurately at an
+ * appointment three months later, so those are what this keeps.
+ *
+ * The one thing here that is genuinely easy to miss without tracking is the
+ * metabolic effect of antipsychotics, which is why weight and glucose are in
+ * the list even without a diabetes diagnosis.
  */
 export const schizophrenia: ConditionModule = {
   key: 'schizophrenia',
   label: 'Schizophrenia',
   summary:
-    'Tracks medication adherence, sleep, mood, and antipsychotic side effects. Watches for early relapse signals.',
+    'Tracks sleep, mood, medication adherence, antipsychotic side effects, and metabolic markers.',
   metrics: [
     { type: 'sleep_hours', dailyPrompts: 1, targetMin: 6, targetMax: 10 },
     { type: 'sleep_quality', dailyPrompts: 1, targetMin: 5, targetMax: 10 },
@@ -27,34 +29,17 @@ export const schizophrenia: ConditionModule = {
       targetMax: 3,
       contexts: ['sedation', 'restlessness', 'stiffness', 'tremor', 'weight_gain', 'dry_mouth'],
     },
-    // Antipsychotics carry metabolic risk, so these are tracked even without a
-    // diabetes diagnosis.
     { type: 'weight', dailyPrompts: 0, targetMin: null, targetMax: null },
     { type: 'blood_glucose', dailyPrompts: 0, targetMin: 70, targetMax: 140 },
   ],
-  questionnaireKeys: ['med_adherence', 'gass_side_effects', 'sleep_quality', 'phq9'],
+  questionnaireKeys: ['med_adherence', 'gass_side_effects', 'sleep_quality'],
+  /**
+   * Physiological thresholds only, matching how the diabetes module works. Sleep
+   * and mood have no flags here on purpose — you already know how you slept, and
+   * the only thing a threshold could add is an interpretation you did not ask
+   * for. Those metrics still chart.
+   */
   redFlags: [
-    {
-      id: 'sleep_collapse',
-      metric: 'sleep_hours',
-      operator: 'lt',
-      threshold: 4,
-      occurrences: 2,
-      windowHours: 72,
-      severity: 'urgent',
-      message:
-        'Two nights of very little sleep in three days. Sleep loss is one of the earliest relapse signals — this is worth a call to your psychiatrist or case manager.',
-    },
-    {
-      id: 'sleep_decline',
-      metric: 'sleep_hours',
-      operator: 'lt',
-      threshold: 5,
-      occurrences: 4,
-      windowHours: 168,
-      severity: 'notice',
-      message: 'Sleep has been short most of this week. Worth mentioning at your next appointment.',
-    },
     {
       id: 'severe_side_effect',
       metric: 'side_effect_severity',
@@ -62,38 +47,33 @@ export const schizophrenia: ConditionModule = {
       threshold: 7,
       occurrences: 1,
       windowHours: 24,
-      severity: 'urgent',
+      severity: 'notice',
       message:
-        'A side effect you rated this severe should be reported to your prescriber. Do not stop the medication on your own — stopping abruptly carries its own risks.',
+        'Logged as severe. Side effects at this level are usually worth raising with your prescriber — a different agent or a change in timing often resolves them.',
     },
     {
-      id: 'mood_drop',
-      metric: 'mood',
-      operator: 'lt',
-      threshold: 3,
-      occurrences: 3,
-      windowHours: 168,
+      id: 'metabolic_glucose',
+      metric: 'blood_glucose',
+      operator: 'gt',
+      threshold: 200,
+      occurrences: 2,
+      windowHours: 336,
       severity: 'notice',
-      message: 'Mood has been low several days this week.',
+      message:
+        'Glucose has come back high more than once recently. Antipsychotics can affect blood sugar, and this is the kind of thing worth a lab check.',
     },
   ],
   trends: [
     {
-      id: 'prodrome',
-      description: 'Early relapse signature',
-      detect:
-        'Declining sleep hours combined with dropping adherence rate over 5-10 days. This combination precedes relapse more reliably than either alone.',
-    },
-    {
-      id: 'adherence_decay',
-      description: 'Adherence slipping',
-      detect: 'Weekly adherence rate declining across 3+ consecutive weeks, even if still above 80%.',
+      id: 'adherence_pattern',
+      description: 'Adherence over time',
+      detect: 'Weekly adherence rate trending up or down across 3+ consecutive weeks.',
     },
     {
       id: 'side_effect_driven_nonadherence',
-      description: 'Side effects driving missed doses',
+      description: 'Side effects lining up with missed doses',
       detect:
-        'Skipped doses with reasons citing side effects, correlated with rising side-effect severity scores. This is actionable — a different agent or dose timing often fixes it.',
+        'Skipped doses with reasons citing side effects, correlated with rising side-effect severity scores. Useful to bring to a prescriber — timing or agent changes often address it.',
     },
     {
       id: 'metabolic_drift',
@@ -101,12 +81,8 @@ export const schizophrenia: ConditionModule = {
       detect: 'Steady weight gain or rising glucose since an antipsychotic start or switch date.',
     },
   ],
-  promptGuidance: `The user has schizophrenia. Adherence and sleep are the highest-value \
-things you track — treat a missed-dose report as information to record, never as something \
-to scold. If they mention hearing voices or unusual experiences, do not argue about whether \
-those experiences are real and do not play along as if you can perceive them; acknowledge \
-what they told you, note it, and ask how they are doing. Route command hallucinations or \
-anything suggesting danger to the crisis path immediately. Never suggest stopping or \
-changing an antipsychotic — abrupt discontinuation carries real relapse risk — but do help \
-them document side effects clearly enough to bring to their prescriber.`,
+  promptGuidance: `The user has schizophrenia. When they report a side effect, capture which \
+medication it relates to and how severe it was — that link is what makes the log useful at \
+an appointment months later. Sleep and mood entries are data to record, not prompts for \
+commentary.`,
 }

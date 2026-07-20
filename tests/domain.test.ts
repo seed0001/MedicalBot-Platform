@@ -51,7 +51,7 @@ describe('condition module merging', () => {
   it('preserves red flags from both modules', () => {
     const flags = mergedRedFlags(modules)
     assert.ok(flags.some((f) => f.id === 'severe_hypo'))
-    assert.ok(flags.some((f) => f.id === 'sleep_collapse'))
+    assert.ok(flags.some((f) => f.id === 'severe_side_effect'))
   })
 
   it('returns nothing for a condition with no module yet', () => {

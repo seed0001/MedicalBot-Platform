@@ -101,10 +101,14 @@ The assistant is a tool-using agent, not a chat box. Tools:
 
 `log_metric`, `log_medication_taken`, `get_metric_history`, `get_medication_schedule`,
 `create_appointment`, `list_upcoming_appointments`, `start_questionnaire`,
-`get_profile_summary`, `update_profile`, `search_health_notes`, `escalate_to_care_team`.
+`get_profile_summary`, `update_profile`, `search_health_notes`, `draft_message_to_provider`.
 
 Write tools that alter medical records confirm with the user before committing.
 There is deliberately **no** `change_medication_dose` tool.
+
+`draft_message_to_provider` drafts only — it never sends. Nothing in this tool list lets
+the assistant contact anyone on its own initiative. The user is the only one who decides
+what leaves this system.
 
 ### 4.3 Context construction
 Every conversation turn assembles: profile summary + active conditions + current meds +
@@ -239,6 +243,8 @@ days to hand a clinician), data export, PWA/mobile, device integrations.
 2. **Which conditions get first-class modules at launch?** Diabetes and schizophrenia are
    named; both are good choices because they exercise opposite ends of the design —
    frequent numeric data vs. adherence and subjective state.
-3. **Caregiver access?** A schizophrenia-focused product often implies a family member or
-   case manager with view access. Big feature; decide early or design around it.
+3. **Shared access?** If the user ever wants to give someone — a family member, a
+   provider — read access to some slice of their data, that is a big feature and is much
+   cheaper to design for now than to bolt on. It is opt-in and user-controlled if it gets
+   built at all; nothing in this platform grants anyone oversight of the user by default.
 4. **Offline entry?** Blood sugar gets logged in places without signal.
