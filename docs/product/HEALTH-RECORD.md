@@ -43,6 +43,52 @@ language. The assistant uses these to answer "what does this mean?" without diag
 | **Insurance** | Carrier, member ID (encrypted), prior auth refs | Optional |
 | **Care goals** | User + provider agreed targets | "A1C under 7", "Walk 20 min daily" |
 
+### Lifestyle & wellness (planned)
+
+Types in `packages/shared/src/lifestyle.ts`. Event-based rows (meals, workouts) plus
+profile-level targets — separate from single-number `metrics` where richer structure helps.
+
+| Domain | Purpose | Example fields |
+|--------|---------|----------------|
+| **Diet / meals** | What you ate, when, and macros | Description, meal type, carbs, calories, protein, note |
+| **Dietary profile** | Patterns and daily targets | Low sodium, carb target g/day, water target |
+| **Exercise** | Sessions with duration and intensity | Walk 30 min moderate; PT Tuesday |
+| **Exercise goals** | Frequency and volume targets | 150 min/week, 8k steps/day |
+| **Sleep** | Sessions beyond a single hours metric | Bed 10:30, up 6:15, quality fair |
+| **Substance use** | Optional granular log | 1 glass wine; 2 coffees (AUDIT-C still scheduled) |
+| **Supplements** | OTC vitamins, minerals, herbals | Vitamin D 2000 IU daily |
+| **Body measurements** | Beyond weight on the scale | Waist 38 in, body fat % |
+| **Stress** | Daily or event stress level | Work deadline — stress 7/10 |
+| **Menstrual cycle** | Period tracking where relevant | Cycle day, flow, symptoms (glucose/mood links) |
+| **Social history** | Baseline lifestyle factors | Smoking status, alcohol pattern, occupation activity level |
+
+`steps`, `sleep_hours`, `water_intake`, `mood`, and `weight` remain in **metrics** for
+charts; lifestyle tables hold the detail Amy cites in conversation ("you walked 4 of the
+last 7 days").
+
+### Other data points worth tracking
+
+| Domain | Why include it |
+|--------|----------------|
+| **Hospitalizations** | Subtype of care visit — admit/discharge dates, reason |
+| **Emergency visits** | ER/urgent care episodes and outcome |
+| **Prior surgeries** | `procedures` with history flag — affects meds and labs |
+| **Implanted devices** | Pacemaker, joint replacement — MRI safety, antibiotics |
+| **Advance directives** | DNR, healthcare proxy — document link only |
+| **Prior auth / referrals** | Status of insurance approvals |
+| **Pharmacy fills** | Pickup dates, days supply remaining (if user logs) |
+| **Home monitoring orders** | "Check BP twice daily" as active `care_order` |
+| **Pain journal** | Flares with triggers, relief, linked to conditions |
+| **Mental health episodes** | Mood episodes, therapy homework — complements PHQ-9 |
+| **Falls / injuries** | Safety events, especially older adults |
+| **Travel / timezone** | Explains glucose or sleep disruption |
+| **Pregnancy / breastfeeding** | Alters med and lab reference ranges |
+| **Vaccination reactions** | Link to `immunizations` row |
+| **Caregiver notes** | If shared access is ever built — opt-in only |
+
+Not every user needs every domain. **Condition modules** suggest which lifestyle domains
+to emphasize (diabetes → diet + exercise; schizophrenia → sleep + substance use).
+
 ---
 
 ## Glossaries and reference tables
@@ -103,9 +149,10 @@ Ordered bundle — see `CONTEXT_ASSEMBLY_ORDER` in `health-record.ts`:
 3. **Active care orders** (what the doctor told you to do)
 4. Upcoming appointments and surgeries
 5. Recent lab results with flags + glossary snippets
-6. Last 7 days of relevant metrics
-7. Recent visits, procedures, symptoms, questionnaire scores
-8. Episodic memory for older conversations
+6. Last 7 days of metrics **plus diet and exercise summaries** (meals, active minutes, steps)
+7. Sleep patterns, supplements, substance use if logged
+8. Recent visits, procedures, symptoms, questionnaire scores
+9. Episodic memory for older conversations
 
 ### Assistant tools (Phase 3 — additions)
 
@@ -120,8 +167,15 @@ Ordered bundle — see `CONTEXT_ASSEMBLY_ORDER` in `health-record.ts`:
 | `add_procedure` | Record surgery or procedure |
 | `list_care_orders` | Active orders due soon |
 | `list_upcoming_care` | Appointments + scheduled procedures |
+| `log_meal` | Record food with optional carbs/calories |
+| `log_exercise` | Record activity session (type, duration, intensity) |
+| `log_sleep_session` | Bed/wake times and quality |
+| `get_lifestyle_summary` | Rolling diet + exercise + sleep rollups |
+| `update_dietary_profile` | Patterns and daily targets |
+| `update_exercise_goals` | Weekly minutes / steps targets |
 
-Existing tools (`log_metric`, `create_appointment`, etc.) remain.
+Existing tools (`log_metric`, `create_appointment`, etc.) remain. Port `log_meal` from
+[medbot](https://github.com/seed0001/medbot).
 
 ### UI surfaces
 
@@ -133,6 +187,8 @@ Existing tools (`log_metric`, `create_appointment`, etc.) remain.
 | **Orders** | Active doctor's orders with due dates |
 | **Visits** | Past appointments with visit notes |
 | **Upcoming** | Appointments, surgeries, prep checklists |
+| **Food & activity** | Meal log, exercise sessions, weekly totals vs. goals |
+| **Sleep** | Session history and averages |
 
 ---
 
@@ -169,10 +225,10 @@ treatment decisions belong to the care team.
 
 ## Marketing line
 
-> **Amy keeps the whole picture** — conditions, prescriptions, visit notes, lab results,
-> doctor's orders, and what's coming up. Tap any condition or medication for a plain-
-> English glossary entry. Every lab result explains what it measures and what typical
-> ranges mean — so you walk into appointments informed, not anxious.
+> **Amy keeps the whole picture** — conditions, prescriptions, meals, exercise, visit notes,
+> lab results, doctor's orders, and what's coming up. Tap any condition or medication for
+> a plain-English glossary entry. Every lab result explains what it measures and what
+> typical ranges mean — so you walk into appointments informed, not anxious.
 
 ---
 
@@ -191,6 +247,7 @@ treatment decisions belong to the care team.
 ## Code references
 
 - Domain list: `packages/shared/src/health-record.ts`
+- Lifestyle types: `packages/shared/src/lifestyle.ts`
 - Glossaries: `packages/shared/src/reference/`
 - Condition modules (operational targets): `packages/conditions/`
 - DB schema: `apps/api/src/db/schema.ts`

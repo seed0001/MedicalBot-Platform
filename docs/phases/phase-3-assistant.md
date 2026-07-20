@@ -32,6 +32,10 @@ A tool-using agent, not a chat box. Write tools confirm with the user before com
 | `add_care_visit` | Summarize a completed visit |
 | `add_procedure` | Record surgery or procedure |
 | `list_care_orders` | Active orders with due dates |
+| `log_meal` | Record food with optional carbs/calories |
+| `log_exercise` | Record activity (type, duration, intensity) |
+| `log_sleep_session` | Bed/wake times and quality |
+| `get_lifestyle_summary` | Diet + exercise + sleep rollups for trends |
 
 **Deliberately absent:** `change_medication_dose`. The assistant never alters prescriptions.
 

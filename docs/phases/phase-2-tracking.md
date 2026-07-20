@@ -42,6 +42,21 @@ logging. This alone is a usable product — no AI required.
 - Care orders list (referrals, labs due, lifestyle instructions)
 - Past visit notes linked to completed appointments
 
+### Diet and exercise
+
+- **Meal log** — description, meal type, carbs, calories, optional protein/fiber/sodium
+- **Dietary profile** — patterns (low sodium, carb-aware, etc.) and daily targets
+- **Exercise sessions** — activity type, duration, intensity, optional steps/distance
+- **Exercise goals** — weekly minutes, active days, step target
+- Charts: daily carbs/calories, exercise minutes per week, steps (from metrics or sessions)
+- Glossary links on dietary patterns and activity intensity (patient education)
+
+### Sleep and wellness (starter)
+
+- Sleep sessions (bed/wake, quality) alongside `sleep_hours` metric
+- Supplements list (OTC, separate from prescriptions)
+- Optional substance-use log; AUDIT-C still on questionnaire schedule
+
 ### Frontend
 
 - Dashboard shell with navigation: Metrics, Medications, Appointments, Profile

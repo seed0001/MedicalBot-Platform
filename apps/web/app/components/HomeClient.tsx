@@ -165,6 +165,7 @@ export function HomeClient() {
           <li>Appointments, synced with Google Calendar</li>
           <li>An assistant with a personality you choose — warm, direct, professional, or your own</li>
           <li>Conditions, prescriptions, labs, doctor&apos;s orders, and visits — with glossaries that explain what they mean</li>
+          <li>Diet, exercise, and sleep — meals, workouts, and weekly activity summaries</li>
         </ul>
       </div>
 
