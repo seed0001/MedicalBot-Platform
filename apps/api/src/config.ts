@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 
 const envSchema = z.object({
@@ -56,27 +57,66 @@ if (!parsed.success) {
 const env = parsed.data
 const inProduction = env.NODE_ENV === 'production'
 
-// Deterministic throwaway values. Fine for local exploration — sessions do not
-// survive a restart and no real Google token is ever encrypted with them.
+const googleOAuthConfigured = Boolean(
+  env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_REDIRECT_URI,
+)
+
+/**
+ * Missing secrets used to exit(1) in production. That is the wrong trade here:
+ * the container never binds a port, so every healthcheck fails and the logs say
+ * nothing about why. Each secret now gets handled on its own terms.
+ *
+ * SESSION_SECRET: generate a random one per boot. Cryptographically fine — the
+ * only cost is that sessions do not survive a restart, so you sign in again.
+ * Never falls back to a hardcoded value in production.
+ *
+ * ENCRYPTION_KEY: this one is load-bearing, because it encrypts stored Google
+ * refresh tokens. Rotating it silently would make existing tokens
+ * undecryptable, so it is still fatal in production — but only when Google
+ * OAuth is actually configured. With no Google integration, nothing is
+ * encrypted and demanding the key is pointless friction.
+ */
 const DEV_SESSION_SECRET = 'dev-only-session-secret-not-for-production-use'
 const DEV_ENCRYPTION_KEY = '0'.repeat(64)
 
-if (inProduction && (!env.SESSION_SECRET || !env.ENCRYPTION_KEY)) {
+if (inProduction && !env.ENCRYPTION_KEY && googleOAuthConfigured) {
   console.error(
-    'SESSION_SECRET and ENCRYPTION_KEY are required in production.\n' +
-      'Generate each with: openssl rand -hex 32',
+    'ENCRYPTION_KEY is required when Google OAuth is configured: it encrypts stored\n' +
+      'refresh tokens, and starting without it would corrupt them on the next rotation.\n' +
+      'Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
   )
   process.exit(1)
 }
 
-if (!env.SESSION_SECRET || !env.ENCRYPTION_KEY) {
-  console.warn('[config] Using throwaway dev secrets. Set real ones before deploying.')
+let sessionSecret = env.SESSION_SECRET
+if (!sessionSecret) {
+  if (inProduction) {
+    sessionSecret = randomBytes(32).toString('hex')
+    console.warn(
+      '[config] SESSION_SECRET is not set. Generated a random one for this boot —\n' +
+        '         sign-ins will not survive a restart or a second instance.\n' +
+        '         Set it in your service variables to make sessions stable.',
+    )
+  } else {
+    sessionSecret = DEV_SESSION_SECRET
+  }
+}
+
+let encryptionKey = env.ENCRYPTION_KEY
+if (!encryptionKey) {
+  encryptionKey = inProduction ? randomBytes(32).toString('hex') : DEV_ENCRYPTION_KEY
+  if (inProduction) {
+    console.warn(
+      '[config] ENCRYPTION_KEY is not set. Using an ephemeral key. This is only safe\n' +
+        '         because Google OAuth is not configured, so nothing is being encrypted.',
+    )
+  }
 }
 
 export const config = {
   ...env,
-  SESSION_SECRET: env.SESSION_SECRET ?? DEV_SESSION_SECRET,
-  ENCRYPTION_KEY: env.ENCRYPTION_KEY ?? DEV_ENCRYPTION_KEY,
+  SESSION_SECRET: sessionSecret,
+  ENCRYPTION_KEY: encryptionKey,
 }
 export type Config = typeof config
 
