@@ -51,7 +51,6 @@ CREATE TABLE "conversations" (
 	"role" text NOT NULL,
 	"content" text NOT NULL,
 	"model" text,
-	"triage_category" text,
 	"tool_calls" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );

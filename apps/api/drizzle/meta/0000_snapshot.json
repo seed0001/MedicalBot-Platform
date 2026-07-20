@@ -1,5 +1,5 @@
 {
-  "id": "c0c3638b-0cd6-4b31-8b6a-44919df541f9",
+  "id": "5f27623f-3047-4701-aa77-6e71a47c92a3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -505,12 +505,6 @@
         },
         "model": {
           "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "triage_category": {
-          "name": "triage_category",
           "type": "text",
           "primaryKey": false,
           "notNull": false

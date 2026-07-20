@@ -12,9 +12,9 @@ The full design is in [SPEC.md](SPEC.md). This README covers running it.
 ## Status
 
 **Phase 1 of 6 — foundation.** Working: monorepo, database schema, Google OAuth login,
-metric ingestion with condition-aware red-flag detection, emergency triage, and the
-OpenRouter client. Not built yet: the conversational agent, calendar sync, the
-questionnaire UI, and the dashboard. See [SPEC.md §10](SPEC.md) for the build order.
+metric ingestion with condition-aware threshold detection, and the OpenRouter client. Not
+built yet: the conversational agent, calendar sync, the questionnaire UI, and the
+dashboard. See [SPEC.md §10](SPEC.md) for the build order.
 
 ## Layout
 
@@ -23,9 +23,9 @@ apps/
   api/         Fastify API — auth, metrics, AI layer, database schema
   web/         Next.js frontend (placeholder shell for now)
 packages/
-  shared/      Domain types, Zod schemas, questionnaires, emergency triage
+  shared/      Domain types, Zod schemas, questionnaires
   conditions/  Condition modules — diabetes, schizophrenia
-tests/         Safety-critical tests (triage, scoring, module merging)
+tests/         Scoring and condition-merge tests
 ```
 
 ### Why conditions are their own package
@@ -90,7 +90,6 @@ quality independently without a code change:
 | `MODEL_CHAT` | Conversation — quality matters most |
 | `MODEL_EXTRACT` | Parsing "sugar was 142 before dinner" into a row. High volume, cheap |
 | `MODEL_ANALYZE` | Trend analysis and the weekly digest. Runs in a job, latency-tolerant |
-| `MODEL_TRIAGE` | Emergency classification on every message. Small and fast |
 
 ## Testing
 
@@ -98,27 +97,24 @@ quality independently without a code change:
 npm test
 ```
 
-Coverage is deliberately concentrated on the paths where a bug is a safety problem rather
-than an inconvenience: emergency detection, PHQ-9 critical-item escalation (a self-harm
-answer must escalate even when the total score is minimal), and the target-band merge for
-users with multiple conditions.
+Coverage is concentrated on the logic that's easy to get subtly wrong: questionnaire
+scoring and banding, and the target-band merge for users with multiple conditions.
 
-## Safety
+## Scope
 
-Three layers, all in code:
+**No message screening.** The app does not scan what you type for crisis keywords and does
+not interject helpline numbers. Adults tracking their own health don't need their logging
+app triaging them, and one that cries wolf on routine entries stops getting used.
 
-**Emergency triage runs before the model.** Every inbound message hits
-`screenForEmergency()` from `@medbot/shared`, plus a small classifier for phrasing the
-keywords miss. When either fires, the user gets hardcoded text with real crisis numbers in
-it — the language model never authors emergency instructions. The matcher is tuned to
-over-trigger: a false positive costs one dismissible message, a false negative costs more.
+**Condition thresholds do fire, and that's the product.** Every metric written is checked
+against the thresholds its condition modules declare, with occurrence counting over a
+window so one outlier doesn't trip a multi-reading rule. A glucose reading of 48 tells you
+it's low and what to do about it. These run on data you chose to record against a
+condition you told the app you have, and they say something specific — they aren't generic
+referrals.
 
-**Condition red flags.** Every metric written is checked against the thresholds its
-condition modules declare, with occurrence counting over a window so a single outlier
-doesn't fire a multi-reading rule.
-
-**Scope enforcement.** There is deliberately no tool that changes a medication dose. Each
-condition module contributes its own guardrails to the system prompt.
+**No dose changes.** There is deliberately no tool that alters a medication. Each condition
+module contributes its own guardrails to the system prompt.
 
 ## Deploying to Railway
 

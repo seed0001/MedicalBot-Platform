@@ -205,8 +205,6 @@ export const conversations = pgTable(
     content: text('content').notNull(),
     // Which OpenRouter model produced this, for assistant turns.
     model: text('model'),
-    // Populated when the triage layer intercepted the turn.
-    triageCategory: text('triage_category'),
     toolCalls: jsonb('tool_calls').$type<unknown[]>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

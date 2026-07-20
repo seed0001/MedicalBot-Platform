@@ -33,9 +33,8 @@ export default function Home() {
       </div>
 
       <div className="notice">
-        <strong>This is not a medical device.</strong> It does not diagnose, prescribe, or
-        adjust doses, and it does not replace your care team. If you are having a medical
-        emergency, call 911. For mental health crises in the US, call or text 988.
+        <strong>Not a medical device.</strong> It tracks your data and shows you patterns.
+        It does not diagnose or prescribe, and it does not replace your care team.
       </div>
     </main>
   )

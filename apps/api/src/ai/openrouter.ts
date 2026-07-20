@@ -6,13 +6,12 @@ import { config, openRouterConfigured } from '../config.js'
  * use is small enough that a fetch wrapper is less code than adapting a SDK.
  */
 
-export type TaskClass = 'chat' | 'extract' | 'analyze' | 'triage'
+export type TaskClass = 'chat' | 'extract' | 'analyze'
 
 const MODEL_BY_TASK: Record<TaskClass, () => string> = {
   chat: () => config.MODEL_CHAT,
   extract: () => config.MODEL_EXTRACT,
   analyze: () => config.MODEL_ANALYZE,
-  triage: () => config.MODEL_TRIAGE,
 }
 
 export interface ChatMessage {

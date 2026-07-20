@@ -7,10 +7,10 @@ maintains a structured medical profile, tracks health metrics over time, manages
 medications and appointments through Google Workspace, and surfaces patterns the user
 would otherwise miss.
 
-**What it is not:** it does not diagnose, does not prescribe, does not adjust doses, and
-does not replace a clinician. Every output that touches clinical territory routes through
-a safety layer (§9). This boundary is a product feature, not a disclaimer — it determines
-how the AI layer is prompted and what tools it is allowed to call.
+**What it is not:** it does not diagnose, does not prescribe, and does not adjust doses.
+That boundary determines what tools the AI layer is allowed to call (§4.2). It is also
+not a nanny — it does not screen the user's messages or interrupt them with helpline
+referrals (§9).
 
 ## 2. Core domains
 
@@ -92,12 +92,9 @@ Not one model for everything. Route by task class:
   fast model with forced JSON schema output. High volume, cheap.
 - **Analysis / trend summaries / weekly digest** — strong reasoning model, runs in a job,
   latency-insensitive.
-- **Classification / triage** (is this message an emergency?) — small model, deterministic
-  prompt, runs on every inbound message before anything else.
-
-Config-driven: `MODEL_CHAT`, `MODEL_EXTRACT`, `MODEL_ANALYZE`, `MODEL_TRIAGE` as env vars
-so models can be swapped without a deploy. Fallback chain per class so a provider outage
-degrades instead of breaking.
+Config-driven: `MODEL_CHAT`, `MODEL_EXTRACT`, `MODEL_ANALYZE` as env vars so models can be
+swapped without a deploy. Fallback chain per class so a provider outage degrades instead
+of breaking.
 
 ### 4.2 Tools the assistant can call
 The assistant is a tool-using agent, not a chat box. Tools:
@@ -187,14 +184,22 @@ real health data.
 
 ## 9. Safety, privacy, compliance
 
-**Emergency triage runs first.** Every inbound message hits a classifier before the main
-agent. Chest pain, stroke signs, suicidal ideation, DKA symptoms, severe hypoglycemia,
-psychiatric crisis → immediate hardcoded response with emergency numbers and crisis line,
-and the conversational agent does not get to freestyle over it.
+**No message screening.** The assistant does not scan what the user types looking for
+crisis keywords, and does not interject helpline numbers. An adult logging their own
+health data does not need to be triaged by their tracking app every time they mention
+feeling bad, and an app that cries wolf on routine entries gets ignored or uninstalled.
+Users know how to call 911.
+
+**Condition thresholds are different, and they stay.** When a glucose reading comes in at
+48, the app says so and says what to do about it, because that is the entire point of
+tracking glucose. These fire on *data the user chose to record against a condition they
+told us they have* — not on the text of their messages — and they carry specific,
+actionable content rather than a generic referral. See the red flags in each condition
+module (§2.2).
 
 **Scope enforcement.** System prompt plus output filtering. The assistant surfaces data
 and patterns, prepares questions for the doctor, and never renders a diagnosis or a dose
-recommendation.
+recommendation. There is deliberately no tool that changes a medication dose.
 
 **HIPAA reality check.** If this stays a personal tool the user runs for themselves,
 HIPAA doesn't attach. The moment it serves other people's health data, it does — and
@@ -217,8 +222,7 @@ CRUD, deploy to Railway. Nothing smart yet; prove the pipes.
 schedules. Adherence logging. This alone is a usable product.
 
 **Phase 3 — Assistant.** OpenRouter integration, tool-calling agent, natural-language
-metric extraction, triage classifier, context assembly. The chat becomes the primary
-interface.
+metric extraction, context assembly. The chat becomes the primary interface.
 
 **Phase 4 — Workspace.** Calendar sync, medication reminders as calendar events, Drive
 health records folder, Gmail appointment detection.
