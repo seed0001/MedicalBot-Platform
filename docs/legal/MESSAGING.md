@@ -62,11 +62,71 @@ Use these everywhere: signup, login banner, footer, App Store description.
 
 **Bullet list (marketing):**
 - A single place for the numbers and notes you already jot on paper
-- An assistant that logs what you say and shows you patterns over weeks
+- An assistant that logs what you say and shows you patterns over weeks — **with a personality you choose**, not a generic chatbot
+- Five ready-made personas (warm, direct, professional, gentle, coach) plus custom
+- Amy keeps your full health record and explains conditions, meds, and labs via built-in glossaries
 - Reminders that land on your real calendar, not buried in email
 - Questionnaires (PHQ-9, GAD-7) trended like any other metric
 - Export anytime — your data is portable
 - No ads, no selling your health data
+
+---
+
+## AI personality (not a generic companion)
+
+**Principle:** The assistant is a **health logger with character**, not ChatGPT in a hospital
+skin. Users pick who they're talking to; safety rules stay fixed.
+
+### Headline
+
+> **An assistant with a personality you choose**
+
+### Subhead
+
+> Not a generic chatbot. Pick a voice that fits how you like to be spoken to — warm,
+> direct, professional, gentle, or entirely your own.
+
+### Short (feature card)
+
+> Choose Maya for warm and informal, Sam for direct and efficient, Dorothy for patient
+> plain language — or describe your own. Tweak how you're addressed and how chatty it is.
+> Medical boundaries never change.
+
+### Medium (landing section)
+
+> Most health apps bolt on a faceless AI. MedicalBot lets you choose who you're talking to:
+> a warm friend, a calm professional, a no-nonsense helper, or someone you describe
+> yourself. You're logging personal health data — the conversation should feel personal
+> too. Personality shapes tone only; the assistant still never diagnoses, prescribes, or
+> changes doses.
+
+### The five personas (marketing table)
+
+| Name | Vibe | One-liner |
+|------|------|-----------|
+| **Maya** | Warm, empathetic, informal | Like a patient friend — great for voice |
+| **Jordan** | Calm, clear, professional | Organized and respectful, minimal small talk |
+| **Sam** | Direct, efficient | Logs fast, confirms in one line |
+| **Dorothy** | Gentle, patient, plain-spoken | Slow pace, no jargon, double-checks details |
+| **Alex** | Encouraging coach | Notices streaks and progress without guilt |
+
+Plus **Create your own**: describe tone, gender presentation, formality, and how you want
+to be addressed (e.g. "female, empathetic, informal — call me Pat, keep it short").
+
+### FAQ — Is this just ChatGPT?
+
+> No. Fixed tools, fixed safety rules, and a personality you configure. It logs, reminds,
+> and summarizes — it doesn't improvise medical advice or new capabilities.
+
+### What not to say
+
+| Avoid | Say instead |
+|-------|-------------|
+| "AI companion" / "AI friend" | "Health assistant with a personality you choose" |
+| "Talk to anyone you want" | "Pick a tone that fits you — five presets or custom" |
+| "The AI becomes whoever you need" | "You set style and tone; medical boundaries stay fixed" |
+
+Full product spec: [docs/product/ASSISTANT-PERSONAS.md](../product/ASSISTANT-PERSONAS.md)
 
 ---
 
@@ -85,6 +145,8 @@ These are true today or planned. Use only what is shipped.
 | "Gmail suggestions require your approval" | Shows we don't auto-act on email |
 | "Open source spec and build phases" | Auditable intent for technical users |
 | "Built for one person: you" | Personal tool framing avoids enterprise HIPAA expectations |
+| "Personality you choose — not a generic chatbot" | Differentiates from faceless AI wrappers |
+| "Five personas or describe your own" | Concrete, memorable product hook |
 
 ---
 
@@ -136,9 +198,10 @@ Short, non-blocking banner at top of app — no re-checkbox unless Terms version
 ## Press / one-liner
 
 > MedicalBot is a personal health assistant that helps adults organize their own metrics,
-> medications, and appointments — with an AI that logs in plain English and Google
-> Calendar reminders that actually reach their phone. It is deliberately not a HIPAA
-> product: honest about what it is, rigorous about what it isn't.
+> medications, and appointments — with an AI that logs in plain English, **adapts to a
+> personality you choose**, and sends Google Calendar reminders that actually reach their
+> phone. It is deliberately not a HIPAA product: honest about what it is, rigorous about
+> what it isn't.
 
 ---
 

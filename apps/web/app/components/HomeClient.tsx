@@ -163,6 +163,8 @@ export function HomeClient() {
           <li>Sleep, mood, and side effects</li>
           <li>Standardized assessments (PHQ-9, GAD-7) trended over time</li>
           <li>Appointments, synced with Google Calendar</li>
+          <li>An assistant with a personality you choose — warm, direct, professional, or your own</li>
+          <li>Conditions, prescriptions, labs, doctor&apos;s orders, and visits — with glossaries that explain what they mean</li>
         </ul>
       </div>
 

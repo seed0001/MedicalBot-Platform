@@ -24,6 +24,8 @@ exit criteria across all phases.
 - [legal/TERMS-OF-USE.md](../legal/TERMS-OF-USE.md) — user-facing Terms of Use
 - [legal/PRIVACY-NOTICE.md](../legal/PRIVACY-NOTICE.md) — privacy notice
 - [docs/legal/MESSAGING.md](legal/MESSAGING.md) — transparent trust messaging guide (PR, onboarding)
+- [docs/product/ASSISTANT-PERSONAS.md](product/ASSISTANT-PERSONAS.md) — AI personality presets and marketing copy
+- [docs/product/HEALTH-RECORD.md](product/HEALTH-RECORD.md) — full health record domains, glossaries, and Amy context
 
 ## Related repos
 

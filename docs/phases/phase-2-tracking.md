@@ -33,6 +33,14 @@ logging. This alone is a usable product — no AI required.
 - Profile editor (demographics, allergies, emergency contact, pharmacy, timezone)
 - Care team management (provider name, specialty, contact, managed conditions)
 - Condition assignment UI loading the correct module per diagnosis
+- **Glossary links** on each condition and medication row (patient education)
+
+### Labs, orders, and visits (starter)
+
+- Structured lab result entry with flag vs. reference range
+- "What does this mean?" panel from `reference/lab-glossary.ts`
+- Care orders list (referrals, labs due, lifestyle instructions)
+- Past visit notes linked to completed appointments
 
 ### Frontend
 
