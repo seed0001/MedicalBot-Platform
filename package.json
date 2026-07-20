@@ -1,0 +1,28 @@
+{
+  "name": "medicalbot-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal health management assistant with Google Workspace integration",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run build --workspace @medbot/shared && npm run build --workspace @medbot/conditions && tsx --test tests/*.test.ts",
+    "dev:api": "npm run dev --workspace @medbot/api",
+    "dev:web": "npm run dev --workspace @medbot/web",
+    "db:generate": "npm run db:generate --workspace @medbot/api",
+    "db:migrate": "npm run db:migrate --workspace @medbot/api"
+  },
+  "devDependencies": {
+    "@medbot/conditions": "*",
+    "@medbot/shared": "*",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

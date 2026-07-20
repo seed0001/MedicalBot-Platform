@@ -1,0 +1,148 @@
+# MedicalBot Platform
+
+A personal health management assistant. Tracks health metrics, medications and adherence,
+appointments, and standardized assessments; talks to the user in natural language; and
+integrates with Google Workspace for calendar, reminders, and health records.
+
+**It does not diagnose, prescribe, or adjust doses.** That boundary is enforced in code —
+see [Safety](#safety) — not just stated in a disclaimer.
+
+The full design is in [SPEC.md](SPEC.md). This README covers running it.
+
+## Status
+
+**Phase 1 of 6 — foundation.** Working: monorepo, database schema, Google OAuth login,
+metric ingestion with condition-aware red-flag detection, emergency triage, and the
+OpenRouter client. Not built yet: the conversational agent, calendar sync, the
+questionnaire UI, and the dashboard. See [SPEC.md §10](SPEC.md) for the build order.
+
+## Layout
+
+```
+apps/
+  api/         Fastify API — auth, metrics, AI layer, database schema
+  web/         Next.js frontend (placeholder shell for now)
+packages/
+  shared/      Domain types, Zod schemas, questionnaires, emergency triage
+  conditions/  Condition modules — diabetes, schizophrenia
+tests/         Safety-critical tests (triage, scoring, module merging)
+```
+
+### Why conditions are their own package
+
+A condition module declares what a diagnosis means operationally: which metrics to track,
+what the target bands are, which questionnaires to schedule, and what counts as a red
+flag. Diabetes is data-dense and numeric; schizophrenia is adherence- and sleep-driven.
+Adding CHF or epilepsy is a new file in `packages/conditions/src`, not a change to the
+core. When a user has several conditions, `mergedMetrics()` takes the stricter target band
+from each.
+
+## Running locally
+
+You need Node 20+ and a Postgres instance.
+
+```bash
+npm install
+cp .env.example .env     # then fill it in — see below
+npm run db:generate      # generate migrations from the schema
+npm run db:migrate       # apply them
+npm run dev:api          # http://localhost:3001
+npm run dev:web          # http://localhost:3000
+```
+
+Check it came up:
+
+```bash
+curl http://localhost:3001/health
+# {"status":"ok","checks":{"database":true,"google":false,"openrouter":false}}
+```
+
+`degraded` means the database ping failed. The `google` and `openrouter` flags just report
+whether those keys are set — the API runs without them, with those features disabled.
+
+### Environment
+
+Required to boot: `DATABASE_URL`, `SESSION_SECRET`, `ENCRYPTION_KEY`. The config module
+validates everything at startup and exits with a specific message rather than failing on
+the first request that needs a missing value.
+
+Generate the two secrets:
+
+```bash
+openssl rand -hex 32    # SESSION_SECRET
+openssl rand -hex 32    # ENCRYPTION_KEY — must be exactly 64 hex chars
+```
+
+`ENCRYPTION_KEY` encrypts Google refresh tokens at rest (AES-256-GCM). **Changing it makes
+existing stored tokens undecryptable** and forces every user to reconnect Google.
+
+Google OAuth: create credentials at
+[console.cloud.google.com](https://console.cloud.google.com) → APIs & Services →
+Credentials, and set the redirect URI to match `GOOGLE_REDIRECT_URI`.
+
+### Model routing
+
+Four task classes route to separately configurable models, so you can tune cost and
+quality independently without a code change:
+
+| Variable | Used for |
+|---|---|
+| `MODEL_CHAT` | Conversation — quality matters most |
+| `MODEL_EXTRACT` | Parsing "sugar was 142 before dinner" into a row. High volume, cheap |
+| `MODEL_ANALYZE` | Trend analysis and the weekly digest. Runs in a job, latency-tolerant |
+| `MODEL_TRIAGE` | Emergency classification on every message. Small and fast |
+
+## Testing
+
+```bash
+npm test
+```
+
+Coverage is deliberately concentrated on the paths where a bug is a safety problem rather
+than an inconvenience: emergency detection, PHQ-9 critical-item escalation (a self-harm
+answer must escalate even when the total score is minimal), and the target-band merge for
+users with multiple conditions.
+
+## Safety
+
+Three layers, all in code:
+
+**Emergency triage runs before the model.** Every inbound message hits
+`screenForEmergency()` from `@medbot/shared`, plus a small classifier for phrasing the
+keywords miss. When either fires, the user gets hardcoded text with real crisis numbers in
+it — the language model never authors emergency instructions. The matcher is tuned to
+over-trigger: a false positive costs one dismissible message, a false negative costs more.
+
+**Condition red flags.** Every metric written is checked against the thresholds its
+condition modules declare, with occurrence counting over a window so a single outlier
+doesn't fire a multi-reading rule.
+
+**Scope enforcement.** There is deliberately no tool that changes a medication dose. Each
+condition module contributes its own guardrails to the system prompt.
+
+## Deploying to Railway
+
+Create one project with four services: **api**, **web**, **Postgres**, and **Redis**.
+
+For `api` and `web`, point the service at this repo and set its config path to
+`apps/api/railway.json` or `apps/web/railway.json` respectively. The API's start command
+runs migrations before booting, and its healthcheck hits `/health`.
+
+Set the environment variables from `.env.example` on the `api` service. `DATABASE_URL` and
+`REDIS_URL` come from the plugins via reference variables. On `web`, set `API_URL` to the
+api service's public URL, and set `APP_URL` on `api` to the web service's URL so CORS and
+the OAuth redirect line up.
+
+Use a separate Railway environment for staging. Never point staging at production data.
+
+## Before this holds anyone else's data
+
+If this stays a personal tool, HIPAA does not attach. The moment it serves another
+person's health data it does, and that means a BAA with Railway, a BAA with every AI
+provider in the request path (OpenRouter fans out to downstream providers — this is the
+hard one), audit logging, and breach procedures. **Decide which product this is before
+building further**, because it changes hosting, model routing, and logging.
+
+Independent of HIPAA, already true here: secrets stay out of git, PHI is redacted from
+logs at the Fastify logger, refresh tokens are encrypted at rest, and Gmail content is
+treated as untrusted input that never reaches the tool-calling agent directly.
