@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { eq } from 'drizzle-orm'
+import { TERMS_VERSION } from '@medbot/shared'
 import { config, googleConfigured } from '../config.js'
 import { db, schema } from '../db/index.js'
 import { encrypt } from '../lib/crypto.js'
@@ -118,13 +119,40 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         id: schema.users.id,
         email: schema.users.email,
         onboardedAt: schema.users.onboardedAt,
+        termsAcceptedAt: schema.users.termsAcceptedAt,
+        termsVersion: schema.users.termsVersion,
       })
       .from(schema.users)
       .where(eq(schema.users.id, userId))
       .limit(1)
 
     if (!user) return reply.code(401).send({ error: 'Not authenticated' })
-    return reply.send(user)
+    return reply.send({
+      ...user,
+      needsTermsAcceptance: needsTermsAcceptance(user.termsAcceptedAt, user.termsVersion),
+      currentTermsVersion: TERMS_VERSION,
+    })
+  })
+
+  app.post('/auth/accept-terms', async (request, reply) => {
+    const userId = request.session.userId
+    if (!userId) return reply.code(401).send({ error: 'Not authenticated' })
+
+    const now = new Date()
+    await db
+      .update(schema.users)
+      .set({
+        termsAcceptedAt: now,
+        termsVersion: TERMS_VERSION,
+        updatedAt: now,
+      })
+      .where(eq(schema.users.id, userId))
+
+    return reply.send({
+      ok: true,
+      termsAcceptedAt: now.toISOString(),
+      termsVersion: TERMS_VERSION,
+    })
   })
 }
 
@@ -182,4 +210,12 @@ export async function requireUser(
   if (!request.session.userId) {
     await reply.code(401).send({ error: 'Not authenticated' })
   }
+}
+
+export function needsTermsAcceptance(
+  termsAcceptedAt: Date | null,
+  termsVersion: string | null,
+): boolean {
+  if (!termsAcceptedAt || !termsVersion) return true
+  return termsVersion !== TERMS_VERSION
 }

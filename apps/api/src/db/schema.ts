@@ -22,6 +22,9 @@ export const users = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     // Set when the user completes intake; gates the rest of the app.
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+    // Terms acceptance — required before using the Service; re-prompt on version bump.
+    termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+    termsVersion: text('terms_version'),
   },
   (t) => [
     uniqueIndex('users_google_id_idx').on(t.googleId),

@@ -19,6 +19,12 @@ The platform is delivered in six phases. Each phase produces a shippable increme
 See [phases/README.md](phases/README.md) for a one-page overview of dependencies and
 exit criteria across all phases.
 
+## Legal and messaging
+
+- [legal/TERMS-OF-USE.md](../legal/TERMS-OF-USE.md) — user-facing Terms of Use
+- [legal/PRIVACY-NOTICE.md](../legal/PRIVACY-NOTICE.md) — privacy notice
+- [docs/legal/MESSAGING.md](legal/MESSAGING.md) — transparent trust messaging guide (PR, onboarding)
+
 ## Related repos
 
 - **[medbot](https://github.com/seed0001/medbot)** — working prototype (diabetes-focused

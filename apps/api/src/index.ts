@@ -5,6 +5,7 @@ import Fastify from 'fastify'
 import { config, isProduction, googleConfigured, openRouterConfigured } from './config.js'
 import { closeDb, pingDb } from './db/index.js'
 import { authRoutes } from './routes/auth.js'
+import { legalRoutes } from './routes/legal.js'
 import { metricRoutes } from './routes/metrics.js'
 
 const app = Fastify({
@@ -59,6 +60,7 @@ app.get('/health', async () => {
 })
 
 await app.register(authRoutes)
+await app.register(legalRoutes)
 await app.register(metricRoutes, { prefix: '/api' })
 
 const shutdown = async (signal: string): Promise<void> => {
