@@ -19,6 +19,7 @@
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^10.0.2",
     "@fastify/session": "^11.0.2",
+    "@fastify/static": "^10.1.0",
     "@medbot/conditions": "*",
     "@medbot/shared": "*",
     "dotenv": "^16.4.7",

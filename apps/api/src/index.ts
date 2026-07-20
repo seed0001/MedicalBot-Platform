@@ -1,6 +1,10 @@
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import session from '@fastify/session'
+import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
 import { config, isProduction, googleConfigured, openRouterConfigured } from './config.js'
 import { closeDb, pingDb, runMigrations, usingPglite } from './db/index.js'
@@ -71,11 +75,46 @@ await app.register(dashboardRoutes, { prefix: '/api' })
 await app.register(recordRoutes, { prefix: '/api' })
 await app.register(metricRoutes, { prefix: '/api' })
 
-// Embedded Postgres has no separate migrate step, so it self-migrates at boot.
-// Hosted Postgres runs migrations from the Railway deploy command instead.
-if (usingPglite) {
+// Migrations run in-process for both drivers so deployment never depends on
+// drizzle-kit being present at runtime (it is a devDependency and gets pruned).
+try {
   await runMigrations()
-  app.log.info('Embedded database ready')
+  app.log.info({ driver: usingPglite ? 'pglite' : 'postgres' }, 'Database ready')
+} catch (error) {
+  app.log.error(error, 'Migrations failed')
+  process.exit(1)
+}
+
+/**
+ * Serve the exported frontend from this same process. Next exports `/dashboard`
+ * as `dashboard.html`, so the not-found handler retries with that suffix before
+ * giving up — that is what makes deep links and refreshes work.
+ */
+const webRoot = join(dirname(fileURLToPath(import.meta.url)), '../../web/out')
+
+if (existsSync(webRoot)) {
+  await app.register(fastifyStatic, { root: webRoot })
+
+  app.setNotFoundHandler((request, reply) => {
+    if (request.method !== 'GET') {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+    // API paths should 404 as JSON rather than falling through to the app shell.
+    const path = request.url.split('?')[0] ?? '/'
+    if (/^\/(api|auth|health|legal)\b/.test(path)) {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+
+    const candidate = `${path.replace(/\/$/, '')}.html`
+    if (existsSync(join(webRoot, candidate))) {
+      return reply.sendFile(candidate)
+    }
+    return reply.code(404).type('text/html').sendFile('404.html')
+  })
+
+  app.log.info({ webRoot }, 'Serving frontend')
+} else {
+  app.log.warn({ webRoot }, 'No frontend build found — API only')
 }
 
 const shutdown = async (signal: string): Promise<void> => {

@@ -1,4 +1,8 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+/**
+ * Empty by default: the API serves this app, so requests are same-origin and
+ * relative. Only set NEXT_PUBLIC_API_URL if the API lives elsewhere.
+ */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export async function apiFetch(path: string, init?: RequestInit) {
   return fetch(`${API_URL}${path}`, {
