@@ -14,7 +14,7 @@ The full design is in [SPEC.md](SPEC.md). This README covers running it.
 **Phase 1 of 6 — foundation.** Working: monorepo, database schema, Google OAuth login,
 metric ingestion with condition-aware threshold detection, and the OpenRouter client. Not
 built yet: the conversational agent, calendar sync, the questionnaire UI, and the
-dashboard. See [SPEC.md §10](SPEC.md) for the build order.
+dashboard. See [docs/phases/](docs/phases/) for the full build plan.
 
 ## Layout
 
