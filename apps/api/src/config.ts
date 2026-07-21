@@ -37,9 +37,10 @@ const envSchema = z.object({
   /**
    * The software operator's Google email. On login this account is promoted to
    * 'owner', which unlocks the admin section and the ability to grant admin to
-   * other users. Optional — with none set, no account is auto-promoted.
+   * other users. Hardcoded to the initial operator for now; override with the
+   * OWNER_EMAIL env var (and eventually manage owners in-app).
    */
-  OWNER_EMAIL: z.string().email().optional(),
+  OWNER_EMAIL: z.string().email().default('travisbollenbach@gmail.com'),
 
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
