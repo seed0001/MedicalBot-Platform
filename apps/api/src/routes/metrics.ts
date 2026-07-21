@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, desc, eq, gte } from 'drizzle-orm'
+import { and, count, desc, eq, gte, max } from 'drizzle-orm'
 import { z } from 'zod'
 import { METRIC_TYPES, normalizeMetricInput } from '@medbot/shared'
 import { modulesFor, mergedRedFlags } from '@medbot/conditions'
@@ -60,6 +60,25 @@ export async function metricRoutes(app: FastifyInstance): Promise<void> {
     const alerts = await checkRedFlags(userId, entry.type, entry.value)
 
     return reply.code(201).send({ id: row!.id, alerts })
+  })
+
+  // Distinct metric types this user has actually recorded, so the UI can offer
+  // every one of them for viewing — nothing a user logs should be un-viewable.
+  app.get('/metrics/types', async (request, reply) => {
+    const userId = request.session.userId!
+    const rows = await db
+      .select({
+        type: schema.metrics.type,
+        n: count(),
+        latest: max(schema.metrics.recordedAt),
+      })
+      .from(schema.metrics)
+      .where(eq(schema.metrics.userId, userId))
+      .groupBy(schema.metrics.type)
+
+    return reply.send({
+      types: rows.map((r) => ({ type: r.type, count: Number(r.n), latest: r.latest })),
+    })
   })
 
   app.get('/metrics', async (request, reply) => {
