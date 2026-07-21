@@ -34,6 +34,13 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().url().optional(),
 
+  /**
+   * The software operator's Google email. On login this account is promoted to
+   * 'owner', which unlocks the admin section and the ability to grant admin to
+   * other users. Optional — with none set, no account is auto-promoted.
+   */
+  OWNER_EMAIL: z.string().email().optional(),
+
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
 

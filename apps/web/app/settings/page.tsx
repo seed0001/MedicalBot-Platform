@@ -52,6 +52,19 @@ export default function SettingsPage() {
         <Preferences />
 
         <section>
+          <h2>Help &amp; tour</h2>
+          <div className="card">
+            <p>
+              New here, or want a refresher? Replay the guided tour to see what each part of the
+              app does and where everything lives.
+            </p>
+            <a className="btn-secondary" href="/dashboard?tour=1">
+              Replay the guided tour
+            </a>
+          </div>
+        </section>
+
+        <section>
           <h2>Mock data</h2>
           <div className="card">
             <p>

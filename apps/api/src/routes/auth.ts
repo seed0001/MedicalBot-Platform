@@ -118,6 +118,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       .select({
         id: schema.users.id,
         email: schema.users.email,
+        role: schema.users.role,
         onboardedAt: schema.users.onboardedAt,
         termsAcceptedAt: schema.users.termsAcceptedAt,
         termsVersion: schema.users.termsVersion,
@@ -129,6 +130,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     if (!user) return reply.code(401).send({ error: 'Not authenticated' })
     return reply.send({
       ...user,
+      isAdmin: user.role === 'admin' || user.role === 'owner',
       needsTermsAcceptance: needsTermsAcceptance(user.termsAcceptedAt, user.termsVersion),
       currentTermsVersion: TERMS_VERSION,
     })
@@ -160,13 +162,23 @@ async function upsertUser(
   profile: { sub: string; email: string; name?: string },
   tokens: { access_token: string; refresh_token?: string; expires_in: number; scope: string },
 ): Promise<string> {
+  // Promote the configured operator to owner on sign-in. Never auto-downgrade an
+  // existing role, so admins keep their access across logins.
+  const isOwner = Boolean(
+    config.OWNER_EMAIL && profile.email.toLowerCase() === config.OWNER_EMAIL.toLowerCase(),
+  )
+
   return db.transaction(async (tx) => {
     const [user] = await tx
       .insert(schema.users)
-      .values({ googleId: profile.sub, email: profile.email })
+      .values({ googleId: profile.sub, email: profile.email, role: isOwner ? 'owner' : 'user' })
       .onConflictDoUpdate({
         target: schema.users.googleId,
-        set: { email: profile.email, updatedAt: new Date() },
+        set: {
+          email: profile.email,
+          updatedAt: new Date(),
+          ...(isOwner ? { role: 'owner' } : {}),
+        },
       })
       .returning({ id: schema.users.id })
 
@@ -218,4 +230,37 @@ export function needsTermsAcceptance(
 ): boolean {
   if (!termsAcceptedAt || !termsVersion) return true
   return termsVersion !== TERMS_VERSION
+}
+
+/** Reads the session user's role, or null when not signed in / not found. */
+export async function roleOf(userId: string | undefined): Promise<string | null> {
+  if (!userId) return null
+  const [row] = await db
+    .select({ role: schema.users.role })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1)
+  return row?.role ?? null
+}
+
+/** preHandler: rejects anyone who is not an admin or owner. */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const role = await roleOf(request.session.userId)
+  if (role !== 'admin' && role !== 'owner') {
+    await reply.code(403).send({ error: 'Admin access required' })
+  }
+}
+
+/** preHandler: rejects anyone who is not the owner. */
+export async function requireOwner(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const role = await roleOf(request.session.userId)
+  if (role !== 'owner') {
+    await reply.code(403).send({ error: 'Owner access required' })
+  }
 }

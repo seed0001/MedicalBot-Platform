@@ -83,8 +83,21 @@ Preferences (time zone, assistant persona) plus the demo-mode controls (regenera
 master reset) when `DEMO_MODE` is on.
 API: `PATCH /api/profile`, demo endpoints.
 
-### 13. Legal (`/terms`, `/privacy`)
+### 13. Admin (`/admin`)
+Visible only to admins and the owner. Platform overview (user/metric/medication/assessment
+counts) and a user table. The owner can grant or revoke admin on other accounts; role changes
+are enforced server-side, owner-only. The owner is bootstrapped from `OWNER_EMAIL`.
+API: `GET /api/admin/overview`, `POST /api/admin/users/:id/role`.
+
+### 14. Legal (`/terms`, `/privacy`)
 Terms of Use and privacy notice, rendered bare.
+
+## First-login helper & guided tour
+
+On first sign-in the dashboard offers a **guided tour** (declinable — decline and you go straight
+in). Accepting runs a spotlight walkthrough that highlights the nav and the + Log action and
+explains every section and where things live. It can be replayed any time from **Settings → Help
+& tour** (`/dashboard?tour=1`). "Seen" state is stored client-side.
 
 ## Write API surface added for this UI
 

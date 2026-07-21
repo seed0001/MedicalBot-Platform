@@ -18,6 +18,12 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     googleId: text('google_id').notNull(),
     email: text('email').notNull(),
+    /**
+     * Access level. 'owner' is the software operator (bootstrapped from
+     * OWNER_EMAIL), 'admin' is a trusted advanced user the owner promotes, and
+     * everyone else is 'user'. Authorization is always checked server-side.
+     */
+    role: text('role').notNull().default('user'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     // Set when the user completes intake; gates the rest of the app.

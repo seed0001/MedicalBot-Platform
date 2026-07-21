@@ -49,6 +49,8 @@ export async function seedDemoData(): Promise<{ userId: string; metrics: number 
       googleId: DEMO_GOOGLE_ID,
       email: DEMO_EMAIL,
       isDemo: true,
+      // The demo account is an owner so the admin section is explorable.
+      role: 'owner',
       onboardedAt: at(DEMO_DAYS, 9, now),
       termsAcceptedAt: at(DEMO_DAYS, 9, now),
       termsVersion: '1.0.0',

@@ -27,7 +27,7 @@ export class NotAuthenticated extends Error {
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await apiFetch(path)
   if (res.status === 401) throw new NotAuthenticated()
-  if (!res.ok) throw new Error(`${path} failed: ${res.status}`)
+  if (!res.ok) throw new ApiError(path, res.status, await safeBody(res))
   return (await res.json()) as T
 }
 

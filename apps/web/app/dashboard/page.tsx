@@ -5,9 +5,13 @@ import Link from 'next/link'
 import { AppGate } from '../components/AppGate'
 import { Modal } from '../components/Modal'
 import { MetricEntryForm } from '../components/MetricEntryForm'
+import { Tour } from '../components/Tour'
 import { useToast } from '../components/Toast'
+import { useMe } from '../components/useMe'
 import { apiGet, NotAuthenticated } from '@/lib/api'
 import { METRIC_LABELS, formatMetric } from '@/lib/format'
+
+const TOUR_SEEN_KEY = 'medbot_tour_seen'
 
 interface Tile {
   type: string
@@ -43,10 +47,39 @@ interface Dashboard {
 
 export default function DashboardPage() {
   const toast = useToast()
+  const me = useMe()
   const [data, setData] = useState<Dashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [logging, setLogging] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
+  const [tourRun, setTourRun] = useState(false)
+
+  const isAdmin = me.status === 'signed-in' && me.me.isAdmin
+
+  // First-login helper: offer the tour once. `?tour=1` (from Settings) replays it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tour') === '1') {
+      window.history.replaceState(null, '', '/dashboard')
+      setTourRun(true)
+      return
+    }
+    if (!localStorage.getItem(TOUR_SEEN_KEY)) setWelcomeOpen(true)
+  }, [])
+
+  const markTourSeen = () => localStorage.setItem(TOUR_SEEN_KEY, '1')
+
+  const startTour = () => {
+    markTourSeen()
+    setWelcomeOpen(false)
+    setTourRun(true)
+  }
+
+  const dismissWelcome = () => {
+    markTourSeen()
+    setWelcomeOpen(false)
+  }
 
   // Refetch on reloadKey so a freshly logged reading shows up without a reload.
   useEffect(() => {
@@ -215,6 +248,33 @@ export default function DashboardPage() {
             }}
           />
         </Modal>
+
+        <Modal open={welcomeOpen} title="Welcome to MedicalBot 👋" onClose={dismissWelcome}>
+          <p>
+            This is your personal health companion — log readings, track medications, take
+            check-ins, and keep everything ready for your next visit.
+          </p>
+          <p className="hint">
+            Want a quick guided tour of how it all fits together? It takes about a minute.
+          </p>
+          <div className="form-actions">
+            <button type="button" className="btn-primary" onClick={startTour}>
+              Take the tour
+            </button>
+            <button type="button" className="btn-secondary" onClick={dismissWelcome}>
+              Explore on my own
+            </button>
+          </div>
+        </Modal>
+
+        <Tour
+          run={tourRun}
+          isAdmin={isAdmin}
+          onClose={() => {
+            markTourSeen()
+            setTourRun(false)
+          }}
+        />
       </main>
     </AppGate>
   )

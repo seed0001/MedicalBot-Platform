@@ -15,6 +15,13 @@
       "when": 1784520349399,
       "tag": "0001_useful_daimon_hellstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784595773183,
+      "tag": "0002_furry_harrier",
+      "breakpoints": true
     }
   ]
 }

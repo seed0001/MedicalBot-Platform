@@ -6,6 +6,8 @@ import { apiGet, NotAuthenticated } from '@/lib/api'
 export interface Me {
   id: string
   email: string
+  role: 'user' | 'admin' | 'owner'
+  isAdmin: boolean
   needsTermsAcceptance: boolean
   onboardedAt: string | null
 }
