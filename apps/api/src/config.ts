@@ -52,6 +52,9 @@ const envSchema = z.object({
   MODEL_CHAT: z.string().default('anthropic/claude-sonnet-4.5'),
   MODEL_EXTRACT: z.string().default('anthropic/claude-haiku-4.5'),
   MODEL_ANALYZE: z.string().default('anthropic/claude-sonnet-4.5'),
+  // Multimodal model for reading uploaded lab reports, prescriptions, and scans.
+  // Must accept images and PDFs.
+  MODEL_VISION: z.string().default('anthropic/claude-sonnet-4.5'),
 })
 
 const parsed = envSchema.safeParse(process.env)

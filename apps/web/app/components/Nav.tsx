@@ -17,6 +17,7 @@ const LINKS = [
   { href: '/conditions', label: 'Conditions', tour: 'nav-conditions' },
   { href: '/appointments', label: 'Appointments', tour: 'nav-appointments' },
   { href: '/records', label: 'Records', tour: 'nav-records' },
+  { href: '/import', label: 'Import', tour: 'nav-import' },
   { href: '/profile', label: 'Profile', tour: 'nav-profile' },
   { href: '/settings', label: 'Settings', tour: 'nav-settings' },
 ]

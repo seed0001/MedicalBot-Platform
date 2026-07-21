@@ -209,6 +209,40 @@ export const questionnaireResponses = pgTable(
   (t) => [index('questionnaire_user_key_time_idx').on(t.userId, t.questionnaireKey, t.completedAt)],
 )
 
+/**
+ * Structured lab results, typically parsed from an uploaded report and confirmed
+ * by the user. Mirrors labResultSchema in @medbot/shared. Numeric results are
+ * also mirrored into `metrics` (type lab_value) so they trend on the charts.
+ */
+export const labResults = pgTable(
+  'lab_results',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    testName: text('test_name').notNull(),
+    loinc: text('loinc'),
+    // Text because a result can be numeric or qualitative ("positive", "<5").
+    value: text('value').notNull(),
+    unit: text('unit'),
+    collectedAt: timestamp('collected_at', { withTimezone: true }),
+    referenceLow: numeric('reference_low', { precision: 12, scale: 3 }),
+    referenceHigh: numeric('reference_high', { precision: 12, scale: 3 }),
+    referenceText: text('reference_text'),
+    // normal | low | high | critical_low | critical_high | abnormal
+    flag: text('flag').notNull().default('normal'),
+    orderingProvider: text('ordering_provider'),
+    performingLab: text('performing_lab'),
+    panelName: text('panel_name'),
+    note: text('note'),
+    // Provenance without storing the file itself: just the source filename.
+    sourceDocument: text('source_document'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('lab_results_user_time_idx').on(t.userId, t.collectedAt)],
+)
+
 export const conversations = pgTable(
   'conversations',
   {
