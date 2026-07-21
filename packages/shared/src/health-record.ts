@@ -116,18 +116,6 @@ export const labResultSchema = {
   note: 'string?',
 } as const
 
-export const IMAGING_MODALITIES = [
-  'xray',
-  'ct',
-  'mri',
-  'ultrasound',
-  'mammogram',
-  'dexa',
-  'pet',
-  'other',
-] as const
-export type ImagingModality = (typeof IMAGING_MODALITIES)[number]
-
 export const PROCEDURE_TYPES = [
   'surgery',
   'endoscopy',

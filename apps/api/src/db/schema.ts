@@ -243,6 +243,54 @@ export const labResults = pgTable(
   (t) => [index('lab_results_user_time_idx').on(t.userId, t.collectedAt)],
 )
 
+/**
+ * Structured imaging reports (echo, CT, MRI, etc.) parsed from uploaded PDFs.
+ * Measurements, findings, conclusions, and diagnoses are stored as JSON arrays.
+ */
+export const imagingReports = pgTable(
+  'imaging_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    modality: text('modality').notNull().default('other'),
+    title: text('title').notNull(),
+    examAt: timestamp('exam_at', { withTimezone: true }),
+    signedAt: timestamp('signed_at', { withTimezone: true }),
+    facility: text('facility'),
+    referringPhysician: text('referring_physician'),
+    readingPhysician: text('reading_physician'),
+    indication: text('indication'),
+    comparisonNote: text('comparison_note'),
+    diagnoses: jsonb('diagnoses')
+      .$type<Array<{ name: string; icdCode: string | null }>>()
+      .notNull()
+      .default([]),
+    measurements: jsonb('measurements')
+      .$type<
+        Array<{
+          name: string
+          value: string
+          unit: string | null
+          indexValue: string | null
+          indexUnit: string | null
+          category: string | null
+        }>
+      >()
+      .notNull()
+      .default([]),
+    findings: jsonb('findings')
+      .$type<Array<{ section: string; text: string }>>()
+      .notNull()
+      .default([]),
+    conclusions: jsonb('conclusions').$type<string[]>().notNull().default([]),
+    sourceDocument: text('source_document'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('imaging_reports_user_time_idx').on(t.userId, t.examAt)],
+)
+
 export const conversations = pgTable(
   'conversations',
   {

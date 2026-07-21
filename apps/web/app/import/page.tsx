@@ -33,15 +33,51 @@ interface Vital {
   at: string | null
   include: boolean
 }
+interface ImagingMeasurement {
+  name: string
+  value: string
+  unit: string | null
+  indexValue: string | null
+  indexUnit: string | null
+  category: string | null
+  include: boolean
+}
+interface ImagingFinding {
+  section: string
+  text: string
+  include: boolean
+}
+interface ImagingConclusion {
+  text: string
+  include: boolean
+}
+interface Diagnosis {
+  name: string
+  icdCode: string | null
+  include: boolean
+}
 
 interface Parsed {
   documentType: string
   documentDate: string | null
   provider: string | null
+  reportTitle: string | null
+  resultsFrom: string | null
+  resultsTo: string | null
+  imagingModality: string | null
+  indication: string | null
+  referringPhysician: string | null
+  readingPhysician: string | null
+  signedAt: string | null
+  comparisonNote: string | null
   notes: string | null
   labResults: Omit<Lab, 'include'>[]
   medications: Omit<Med, 'include'>[]
   vitals: Omit<Vital, 'include'>[]
+  imagingMeasurements: Omit<ImagingMeasurement, 'include'>[]
+  imagingFindings: Omit<ImagingFinding, 'include'>[]
+  imagingConclusions: string[]
+  diagnoses: Omit<Diagnosis, 'include'>[]
 }
 
 type Phase = 'idle' | 'parsing' | 'review' | 'committing'
@@ -59,10 +95,31 @@ export default function ImportPage() {
   const toast = useToast()
   const [phase, setPhase] = useState<Phase>('idle')
   const [filename, setFilename] = useState('')
-  const [meta, setMeta] = useState<Pick<Parsed, 'documentType' | 'documentDate' | 'provider' | 'notes'> | null>(null)
+  const [meta, setMeta] = useState<
+    Pick<
+      Parsed,
+      | 'documentType'
+      | 'documentDate'
+      | 'provider'
+      | 'reportTitle'
+      | 'resultsFrom'
+      | 'resultsTo'
+      | 'imagingModality'
+      | 'indication'
+      | 'referringPhysician'
+      | 'readingPhysician'
+      | 'signedAt'
+      | 'comparisonNote'
+      | 'notes'
+    > | null
+  >(null)
   const [labs, setLabs] = useState<Lab[]>([])
   const [meds, setMeds] = useState<Med[]>([])
   const [vitals, setVitals] = useState<Vital[]>([])
+  const [imagingMeasurements, setImagingMeasurements] = useState<ImagingMeasurement[]>([])
+  const [imagingFindings, setImagingFindings] = useState<ImagingFinding[]>([])
+  const [imagingConclusions, setImagingConclusions] = useState<ImagingConclusion[]>([])
+  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notConfigured, setNotConfigured] = useState(false)
 
@@ -84,13 +141,33 @@ export default function ImportPage() {
         documentType: parsed.documentType,
         documentDate: parsed.documentDate,
         provider: parsed.provider,
+        reportTitle: parsed.reportTitle,
+        resultsFrom: parsed.resultsFrom,
+        resultsTo: parsed.resultsTo,
+        imagingModality: parsed.imagingModality,
+        indication: parsed.indication,
+        referringPhysician: parsed.referringPhysician,
+        readingPhysician: parsed.readingPhysician,
+        signedAt: parsed.signedAt,
+        comparisonNote: parsed.comparisonNote,
         notes: parsed.notes,
       })
       setLabs(parsed.labResults.map((l) => ({ ...l, include: true })))
       setMeds(parsed.medications.map((m) => ({ ...m, include: true })))
       setVitals(parsed.vitals.map((v) => ({ ...v, include: true })))
+      setImagingMeasurements(parsed.imagingMeasurements.map((m) => ({ ...m, include: true })))
+      setImagingFindings(parsed.imagingFindings.map((f) => ({ ...f, include: true })))
+      setImagingConclusions(parsed.imagingConclusions.map((text) => ({ text, include: true })))
+      setDiagnoses(parsed.diagnoses.map((d) => ({ ...d, include: true })))
       setPhase('review')
-      const total = parsed.labResults.length + parsed.medications.length + parsed.vitals.length
+      const total =
+        parsed.labResults.length +
+        parsed.medications.length +
+        parsed.vitals.length +
+        parsed.imagingMeasurements.length +
+        parsed.imagingFindings.length +
+        parsed.imagingConclusions.length +
+        parsed.diagnoses.length
       if (total === 0) toast.show('No records found in that document.', 'info')
     } catch (err) {
       setPhase('idle')
@@ -104,19 +181,52 @@ export default function ImportPage() {
 
   async function commit() {
     setPhase('committing')
+    const selectedMeasurements = imagingMeasurements.filter((m) => m.include)
+    const selectedFindings = imagingFindings.filter((f) => f.include)
+    const selectedConclusions = imagingConclusions.filter((c) => c.include)
+    const selectedDiagnoses = diagnoses.filter((d) => d.include)
+    const hasImaging =
+      selectedMeasurements.length > 0 ||
+      selectedFindings.length > 0 ||
+      selectedConclusions.length > 0 ||
+      selectedDiagnoses.length > 0
+
     try {
-      const res = await apiPost<{ labsAdded: number; medsAdded: number; vitalsAdded: number }>(
-        '/api/import/commit',
-        {
-          sourceDocument: filename,
-          labResults: labs.filter((l) => l.include).map(({ include, ...rest }) => rest),
-          medications: meds.filter((m) => m.include).map(({ include, ...rest }) => rest),
-          vitals: vitals.filter((v) => v.include).map(({ include, ...rest }) => rest),
-        },
-      )
-      toast.show(
-        `Saved ${res.labsAdded} lab result(s), ${res.medsAdded} medication(s), ${res.vitalsAdded} vital(s).`,
-      )
+      const res = await apiPost<{
+        labsAdded: number
+        medsAdded: number
+        vitalsAdded: number
+        imagingAdded: number
+      }>('/api/import/commit', {
+        sourceDocument: filename,
+        labResults: labs.filter((l) => l.include).map(({ include, ...rest }) => rest),
+        medications: meds.filter((m) => m.include).map(({ include, ...rest }) => rest),
+        vitals: vitals.filter((v) => v.include).map(({ include, ...rest }) => rest),
+        imagingReport: hasImaging
+          ? {
+              modality: (meta?.imagingModality as 'echo') ?? 'other',
+              title: meta?.reportTitle ?? filename,
+              examAt: meta?.documentDate,
+              signedAt: meta?.signedAt,
+              facility: meta?.provider,
+              referringPhysician: meta?.referringPhysician,
+              readingPhysician: meta?.readingPhysician,
+              indication: meta?.indication,
+              comparisonNote: meta?.comparisonNote,
+              measurements: selectedMeasurements.map(({ include, ...rest }) => rest),
+              findings: selectedFindings.map(({ include, ...rest }) => rest),
+              conclusions: selectedConclusions.map((c) => c.text),
+              diagnoses: selectedDiagnoses.map(({ include, ...rest }) => rest),
+            }
+          : null,
+      })
+      const parts = [
+        res.labsAdded ? `${res.labsAdded} lab(s)` : '',
+        res.medsAdded ? `${res.medsAdded} medication(s)` : '',
+        res.vitalsAdded ? `${res.vitalsAdded} vital(s)` : '',
+        res.imagingAdded ? `${res.imagingAdded} imaging report(s)` : '',
+      ].filter(Boolean)
+      toast.show(`Saved ${parts.join(', ')}.`)
       reset()
     } catch {
       setPhase('review')
@@ -130,13 +240,30 @@ export default function ImportPage() {
     setLabs([])
     setMeds([])
     setVitals([])
+    setImagingMeasurements([])
+    setImagingFindings([])
+    setImagingConclusions([])
+    setDiagnoses([])
     setFilename('')
   }
 
   const selectedCount =
     labs.filter((l) => l.include).length +
     meds.filter((m) => m.include).length +
-    vitals.filter((v) => v.include).length
+    vitals.filter((v) => v.include).length +
+    imagingMeasurements.filter((m) => m.include).length +
+    imagingFindings.filter((f) => f.include).length +
+    imagingConclusions.filter((c) => c.include).length +
+    diagnoses.filter((d) => d.include).length
+
+  const hasAnyItems =
+    labs.length > 0 ||
+    meds.length > 0 ||
+    vitals.length > 0 ||
+    imagingMeasurements.length > 0 ||
+    imagingFindings.length > 0 ||
+    imagingConclusions.length > 0 ||
+    diagnoses.length > 0
 
   return (
     <AppGate>
@@ -145,8 +272,8 @@ export default function ImportPage() {
           <div>
             <h1>Import a document</h1>
             <p className="muted">
-              Upload a lab report, prescription, or visit summary. We read it and pull out your
-              data for you to review before anything is saved.
+              Upload a lab report, imaging study, prescription, or visit summary. We read it and
+              pull out your data for you to review before anything is saved.
             </p>
           </div>
         </div>
@@ -191,12 +318,21 @@ export default function ImportPage() {
             <div className="card">
               <div className="row-between">
                 <div>
-                  <strong>{filename}</strong>
+                  <strong>{meta.reportTitle ?? filename}</strong>
                   <p className="hint">
                     {meta.documentType.replace(/_/g, ' ')}
-                    {meta.documentDate && ` · ${meta.documentDate}`}
+                    {meta.resultsFrom && meta.resultsTo && ` · ${meta.resultsFrom} – ${meta.resultsTo}`}
+                    {!meta.resultsFrom && meta.documentDate && ` · exam ${meta.documentDate}`}
+                    {meta.signedAt && ` · signed ${meta.signedAt}`}
                     {meta.provider && ` · ${meta.provider}`}
                   </p>
+                  {meta.indication && <p className="hint">Indication: {meta.indication}</p>}
+                  {meta.readingPhysician && (
+                    <p className="hint">Read by: {meta.readingPhysician}</p>
+                  )}
+                  {meta.comparisonNote && (
+                    <p className="hint">Comparison: {meta.comparisonNote}</p>
+                  )}
                 </div>
                 <button type="button" className="btn-ghost btn-sm" onClick={reset}>
                   Start over
@@ -204,17 +340,148 @@ export default function ImportPage() {
               </div>
             </div>
 
-            {labs.length === 0 && meds.length === 0 && vitals.length === 0 ? (
+            {!hasAnyItems ? (
               <div className="empty-state">
                 <span className="empty-icon">📄</span>
                 <h3>Nothing to import</h3>
-                <p>We couldn't find labs, medications, or vitals in that document.</p>
+                <p>We couldn't find labs, medications, vitals, or imaging data in that document.</p>
               </div>
             ) : (
               <p className="hint">
                 Review what we found, fix anything that looks off, and untick anything you don't
                 want. Nothing is saved until you press “Save selected”.
               </p>
+            )}
+
+            {diagnoses.length > 0 && (
+              <section>
+                <h2>Diagnoses ({diagnoses.length})</h2>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Add</th>
+                        <th>Diagnosis</th>
+                        <th>ICD-10</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnoses.map((d, i) => (
+                        <tr key={i}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={d.include}
+                              onChange={(e) =>
+                                setDiagnoses((p) =>
+                                  p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>{d.name}</td>
+                          <td className="hint">{d.icdCode ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {imagingMeasurements.length > 0 && (
+              <section>
+                <h2>Imaging measurements ({imagingMeasurements.length})</h2>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Add</th>
+                        <th>Measurement</th>
+                        <th>Value</th>
+                        <th>Section</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {imagingMeasurements.map((m, i) => (
+                        <tr key={i}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={m.include}
+                              onChange={(e) =>
+                                setImagingMeasurements((p) =>
+                                  p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>{m.name}</td>
+                          <td>
+                            {m.value} {m.unit ?? ''}
+                            {m.indexValue && (
+                              <span className="hint">
+                                {' '}
+                                (index {m.indexValue} {m.indexUnit ?? ''})
+                              </span>
+                            )}
+                          </td>
+                          <td className="hint">{m.category ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {imagingFindings.length > 0 && (
+              <section>
+                <h2>Findings ({imagingFindings.length})</h2>
+                {imagingFindings.map((f, i) => (
+                  <div key={i} className="card" style={{ marginBottom: '0.75rem' }}>
+                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                      <input
+                        type="checkbox"
+                        checked={f.include}
+                        onChange={(e) =>
+                          setImagingFindings((p) =>
+                            p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)),
+                          )
+                        }
+                      />
+                      <span>
+                        <strong>{f.section}</strong>
+                        <p className="hint" style={{ marginTop: '0.25rem' }}>
+                          {f.text}
+                        </p>
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {imagingConclusions.length > 0 && (
+              <section>
+                <h2>Conclusions ({imagingConclusions.length})</h2>
+                {imagingConclusions.map((c, i) => (
+                  <div key={i} className="card" style={{ marginBottom: '0.5rem' }}>
+                    <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                      <input
+                        type="checkbox"
+                        checked={c.include}
+                        onChange={(e) =>
+                          setImagingConclusions((p) =>
+                            p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)),
+                          )
+                        }
+                      />
+                      <span>{c.text}</span>
+                    </label>
+                  </div>
+                ))}
+              </section>
             )}
 
             {labs.length > 0 && (
@@ -374,7 +641,7 @@ export default function ImportPage() {
               </section>
             )}
 
-            {(labs.length > 0 || meds.length > 0 || vitals.length > 0) && (
+            {hasAnyItems && (
               <div className="form-actions">
                 <button
                   type="button"

@@ -34,50 +34,120 @@ export interface ExtractedVital {
   at: string | null
 }
 
+export interface ExtractedImagingMeasurement {
+  name: string
+  value: string
+  unit: string | null
+  indexValue: string | null
+  indexUnit: string | null
+  category: string | null
+}
+
+export interface ExtractedImagingFinding {
+  section: string
+  text: string
+}
+
+export interface ExtractedDiagnosis {
+  name: string
+  icdCode: string | null
+}
+
 export interface ExtractedDocument {
   documentType: string
   documentDate: string | null
   provider: string | null
+  reportTitle: string | null
+  resultsFrom: string | null
+  resultsTo: string | null
+  imagingModality: string | null
+  indication: string | null
+  referringPhysician: string | null
+  readingPhysician: string | null
+  signedAt: string | null
+  comparisonNote: string | null
   labResults: ExtractedLab[]
   medications: ExtractedMed[]
   vitals: ExtractedVital[]
+  imagingMeasurements: ExtractedImagingMeasurement[]
+  imagingFindings: ExtractedImagingFinding[]
+  imagingConclusions: string[]
+  diagnoses: ExtractedDiagnosis[]
   notes: string | null
 }
 
-const SYSTEM = `You extract structured data from a personal health document (a lab report, prescription, visit summary, imaging report, or immunization record). You do not diagnose or interpret — you transcribe what is printed, accurately.
+const SYSTEM = `You extract structured data from a personal health document (a lab report, lab trend export, prescription, visit summary, imaging report, or immunization record). You do not diagnose or interpret — you transcribe what is printed, accurately.
 
 Return ONLY a single JSON object, no prose and no code fences, in exactly this shape:
 {
-  "documentType": "lab_report" | "prescription" | "visit_summary" | "imaging_report" | "immunization" | "other",
-  "documentDate": string | null,            // ISO date if a report/collection date is printed
-  "provider": string | null,                // ordering provider or clinic, if printed
-  "labResults": [
-    { "testName": string, "value": string, "unit": string | null,
-      "referenceText": string | null,       // reference range exactly as printed, e.g. "70-99 mg/dL"
-      "flag": "normal"|"low"|"high"|"critical_low"|"critical_high"|"abnormal"|null,
-      "panelName": string | null,           // e.g. "Comprehensive Metabolic Panel"
-      "loinc": string | null,
-      "collectedAt": string | null }        // ISO datetime if printed
+  "documentType": "lab_report" | "lab_trends" | "prescription" | "visit_summary" | "imaging_report" | "immunization" | "other",
+  "documentDate": string | null,
+  "provider": string | null,
+  "reportTitle": string | null,
+  "resultsFrom": string | null,
+  "resultsTo": string | null,
+  "imagingModality": "echo" | "ct" | "mri" | "xray" | "ultrasound" | "mammogram" | "dexa" | "pet" | "other" | null,
+  "indication": string | null,
+  "referringPhysician": string | null,
+  "readingPhysician": string | null,
+  "signedAt": string | null,
+  "comparisonNote": string | null,
+  "labResults": [ ... ],
+  "medications": [ ... ],
+  "vitals": [ ... ],
+  "imagingMeasurements": [
+    { "name": string, "value": string, "unit": string | null,
+      "indexValue": string | null, "indexUnit": string | null,
+      "category": string | null }
   ],
-  "medications": [
-    { "name": string, "dose": string | null, "form": string | null,
-      "frequency": string | null, "purpose": string | null }
+  "imagingFindings": [
+    { "section": string, "text": string }
   ],
-  "vitals": [
-    { "type": string, "value": number | null, "valueSecondary": number | null,
-      "unit": string | null, "at": string | null }
+  "imagingConclusions": [ string ],
+  "diagnoses": [
+    { "name": string, "icdCode": string | null }
   ],
   "notes": string | null
 }
 
+labResults item shape:
+{ "testName": string, "value": string, "unit": string | null, "referenceText": string | null,
+  "flag": "normal"|"low"|"high"|"critical_low"|"critical_high"|"abnormal"|null,
+  "panelName": string | null, "loinc": string | null, "collectedAt": string | null }
+
+medications item shape:
+{ "name": string, "dose": string | null, "form": string | null, "frequency": string | null, "purpose": string | null }
+
+vitals item shape:
+{ "type": string, "value": number | null, "valueSecondary": number | null, "unit": string | null, "at": string | null }
+
 Rules:
-- For "vitals.type" use one of: blood_pressure, heart_rate, weight, temperature, spo2, blood_glucose. For blood_pressure put systolic in "value" and diastolic in "valueSecondary".
-- Only include items that are actually present in the document. Empty arrays are fine.
+- For "vitals.type" use: blood_pressure, heart_rate, weight, temperature, spo2, blood_glucose. For blood_pressure put systolic in "value" and diastolic in "valueSecondary". Use exam date for "at" when printed.
+
+- **Lab trend reports** (portal "Result Trends", rows = tests, columns = dates): documentType "lab_trends". One labResults row per test per collection date. Copy High/Low flags. panelName from report title.
+
+- **Imaging reports — especially echocardiograms (TTE)**:
+  - documentType "imaging_report"; imagingModality "echo" for transthoracic echo.
+  - reportTitle: full study name (e.g. "TRANSTHORACIC ECHOCARDIOGRAM REPORT").
+  - documentDate: exam date; signedAt: electronic signature date if different.
+  - provider: facility name (e.g. imaging center).
+  - Extract ALL of the following when present:
+    * **imagingMeasurements**: every value in MEASUREMENTS and numeric values embedded in FINDINGS — LVIDd, LVIDs, IVSd, LVPWd, LA size, RA area/volume, TAPSE, RV dimensions, valve velocities, IVC, aorta, EF (including ranges like "50 to 55%"), stroke volume, MV E/A velocities, E/e' ratios, LVOT gradients (rest and Valsalva), height, weight, BSA. Use category for anatomic section (LEFT VENTRICLE, MITRAL VALVE, etc.). Include index values when printed (e.g. indexValue "2.32", indexUnit "cm/m²").
+    * **imagingFindings**: one entry per FINDINGS section header (LEFT VENTRICLE, LEFT ATRIUM, RIGHT VENTRICLE, valves, AORTA, IVC, PERICARDIUM, etc.) with the full narrative text under that header.
+    * **imagingConclusions**: each numbered conclusion line verbatim, without the number prefix.
+    * **diagnoses**: diagnosis line(s) with ICD-10 code when printed (e.g. "Hypertrophic cardiomyopathy", icdCode "I42.2").
+    * **comparisonNote**: text comparing to prior study if printed.
+    * **indication**, **referringPhysician**, **readingPhysician** when printed.
+  - Also put weight and blood_pressure in vitals if printed in the header.
+
+- BMP/CMP lab components: Sodium, BUN, Calcium, Potassium, Chloride, Total CO2, Anion Gap, Glucose, Creatinine, eGFR.
+
+- Only include items actually present. Empty arrays are fine.
 - Never invent values. If a field is not printed, use null.
-- Do not include interpretation, advice, or a diagnosis anywhere.`
+- Do not include interpretation, advice, or a diagnosis beyond what is printed on the report.`
 
 const INSTRUCTION =
-  'Extract the structured data from this document as JSON, following the schema and rules exactly.'
+  'Extract the structured data from this document as JSON, following the schema and rules exactly. For imaging reports, be exhaustive — capture every measurement, finding section, conclusion, and diagnosis printed.'
 
 export async function extractDocument(input: {
   filename: string
@@ -94,7 +164,7 @@ export async function extractDocument(input: {
     { role: 'user', content: [{ type: 'text', text: INSTRUCTION }, filePart] },
   ]
 
-  const res = await complete({ task: 'vision', messages, temperature: 0, maxTokens: 4096 })
+  const res = await complete({ task: 'vision', messages, temperature: 0, maxTokens: 16384 })
   return normalize(parseJson(res.content))
 }
 
@@ -131,6 +201,15 @@ function normalize(d: Record<string, unknown>): ExtractedDocument {
     documentType: str(d.documentType) ?? 'other',
     documentDate: str(d.documentDate),
     provider: str(d.provider),
+    reportTitle: str(d.reportTitle),
+    resultsFrom: str(d.resultsFrom),
+    resultsTo: str(d.resultsTo),
+    imagingModality: str(d.imagingModality),
+    indication: str(d.indication),
+    referringPhysician: str(d.referringPhysician),
+    readingPhysician: str(d.readingPhysician),
+    signedAt: str(d.signedAt),
+    comparisonNote: str(d.comparisonNote),
     notes: str(d.notes),
     labResults: arr(d.labResults)
       .map((r) => r as Record<string, unknown>)
@@ -164,6 +243,34 @@ function normalize(d: Record<string, unknown>): ExtractedDocument {
         valueSecondary: num(r.valueSecondary),
         unit: str(r.unit),
         at: str(r.at),
+      })),
+    imagingMeasurements: arr(d.imagingMeasurements)
+      .map((r) => r as Record<string, unknown>)
+      .filter((r) => str(r.name) && (str(r.value) || num(r.value) !== null))
+      .map((r) => ({
+        name: str(r.name)!,
+        value: str(r.value) ?? String(num(r.value)),
+        unit: str(r.unit),
+        indexValue: str(r.indexValue),
+        indexUnit: str(r.indexUnit),
+        category: str(r.category),
+      })),
+    imagingFindings: arr(d.imagingFindings)
+      .map((r) => r as Record<string, unknown>)
+      .filter((r) => str(r.section) && str(r.text))
+      .map((r) => ({
+        section: str(r.section)!,
+        text: str(r.text)!,
+      })),
+    imagingConclusions: arr(d.imagingConclusions)
+      .map((c) => (typeof c === 'string' ? c.trim() : ''))
+      .filter(Boolean),
+    diagnoses: arr(d.diagnoses)
+      .map((r) => r as Record<string, unknown>)
+      .filter((r) => str(r.name))
+      .map((r) => ({
+        name: str(r.name)!,
+        icdCode: str(r.icdCode),
       })),
   }
 }

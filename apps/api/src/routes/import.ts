@@ -1,7 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import { desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { METRIC_TYPES, normalizeMetricInput } from '@medbot/shared'
+import {
+  IMAGING_MODALITIES,
+  METRIC_TYPES,
+  enrichLabResult,
+  imagingMeasurementSchema,
+  imagingFindingSchema,
+  extractedDiagnosisSchema,
+  LAB_FLAGS,
+  normalizeMetricInput,
+} from '@medbot/shared'
 import { openRouterConfigured } from '../config.js'
 import { db, schema } from '../db/index.js'
 import { extractDocument } from '../ai/extract-document.js'
@@ -86,7 +95,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           value: z.string().min(1),
           unit: z.string().nullish(),
           referenceText: z.string().nullish(),
-          flag: z.string().nullish(),
+          flag: z.enum(LAB_FLAGS).nullish(),
           panelName: z.string().nullish(),
           loinc: z.string().nullish(),
           collectedAt: z.string().nullish(),
@@ -115,6 +124,23 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
         }),
       )
       .default([]),
+    imagingReport: z
+      .object({
+        modality: z.enum(IMAGING_MODALITIES).default('other'),
+        title: z.string().min(1),
+        examAt: z.string().nullish(),
+        signedAt: z.string().nullish(),
+        facility: z.string().nullish(),
+        referringPhysician: z.string().nullish(),
+        readingPhysician: z.string().nullish(),
+        indication: z.string().nullish(),
+        comparisonNote: z.string().nullish(),
+        measurements: z.array(imagingMeasurementSchema).default([]),
+        findings: z.array(imagingFindingSchema).default([]),
+        conclusions: z.array(z.string().min(1)).default([]),
+        diagnoses: z.array(extractedDiagnosisSchema).default([]),
+      })
+      .nullish(),
   })
 
   app.post('/import/commit', async (request, reply) => {
@@ -123,35 +149,42 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: 'Invalid selection', issues: parsed.error.issues })
     }
     const userId = request.session.userId!
-    const { labResults, medications, vitals, sourceDocument } = parsed.data
+    const { labResults, medications, vitals, sourceDocument, imagingReport } = parsed.data
+    let imagingAdded = 0
 
     await db.transaction(async (tx) => {
       for (const lab of labResults) {
-        const collectedAt = toDate(lab.collectedAt)
-        await tx.insert(schema.labResults).values({
-          userId,
-          testName: lab.testName,
-          loinc: lab.loinc ?? null,
-          value: lab.value,
-          unit: lab.unit ?? null,
-          collectedAt,
-          referenceText: lab.referenceText ?? null,
-          flag: lab.flag ?? 'normal',
-          panelName: lab.panelName ?? null,
+        const enriched = enrichLabResult({
+          ...lab,
           sourceDocument: sourceDocument ?? null,
         })
-        // Mirror numeric results into metrics so they trend on the charts.
-        const n = Number(lab.value)
+        const collectedAt = toDate(enriched.collectedAt)
+        await tx.insert(schema.labResults).values({
+          userId,
+          testName: enriched.testName,
+          loinc: enriched.loinc,
+          value: enriched.value,
+          unit: enriched.unit,
+          collectedAt,
+          referenceLow: enriched.referenceLow != null ? String(enriched.referenceLow) : null,
+          referenceHigh: enriched.referenceHigh != null ? String(enriched.referenceHigh) : null,
+          referenceText: enriched.referenceText,
+          flag: enriched.flag,
+          panelName: enriched.panelName,
+          note: enriched.note,
+          sourceDocument: enriched.sourceDocument,
+        })
+        const n = Number(enriched.value)
         if (Number.isFinite(n)) {
           await tx.insert(schema.metrics).values({
             userId,
             type: 'lab_value',
             value: String(n),
-            unit: lab.unit ?? 'varies',
+            unit: enriched.unit ?? 'varies',
             recordedAt: collectedAt ?? new Date(),
             source: 'lab_upload',
-            context: lab.testName,
-            note: lab.referenceText ?? null,
+            context: enriched.testName,
+            note: enriched.referenceText ?? enriched.note ?? null,
           })
         }
       }
@@ -195,6 +228,69 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           context: null,
         })
       }
+
+      if (imagingReport) {
+        const examAt = toDate(imagingReport.examAt)
+        await tx.insert(schema.imagingReports).values({
+          userId,
+          modality: imagingReport.modality,
+          title: imagingReport.title,
+          examAt,
+          signedAt: toDate(imagingReport.signedAt),
+          facility: imagingReport.facility ?? null,
+          referringPhysician: imagingReport.referringPhysician ?? null,
+          readingPhysician: imagingReport.readingPhysician ?? null,
+          indication: imagingReport.indication ?? null,
+          comparisonNote: imagingReport.comparisonNote ?? null,
+          measurements: imagingReport.measurements.map((m) => ({
+            name: m.name,
+            value: m.value,
+            unit: m.unit ?? null,
+            indexValue: m.indexValue ?? null,
+            indexUnit: m.indexUnit ?? null,
+            category: m.category ?? null,
+          })),
+          findings: imagingReport.findings.map((f) => ({
+            section: f.section,
+            text: f.text,
+          })),
+          conclusions: imagingReport.conclusions,
+          diagnoses: imagingReport.diagnoses.map((d) => ({
+            name: d.name,
+            icdCode: d.icdCode ?? null,
+          })),
+          sourceDocument: sourceDocument ?? null,
+        })
+        imagingAdded = 1
+
+        for (const m of imagingReport.measurements) {
+          const displayValue = m.indexValue ? `${m.value} (index ${m.indexValue} ${m.indexUnit ?? ''})`.trim() : m.value
+          const n = Number.parseFloat(m.value.replace(/[^\d.-]/g, ''))
+          await tx.insert(schema.labResults).values({
+            userId,
+            testName: m.name,
+            value: displayValue,
+            unit: m.unit,
+            collectedAt: examAt,
+            flag: 'normal',
+            panelName: imagingReport.title,
+            note: m.category,
+            sourceDocument: sourceDocument ?? null,
+          })
+          if (Number.isFinite(n)) {
+            await tx.insert(schema.metrics).values({
+              userId,
+              type: 'lab_value',
+              value: String(n),
+              unit: m.unit ?? 'varies',
+              recordedAt: examAt ?? new Date(),
+              source: 'lab_upload',
+              context: m.name,
+              note: imagingReport.title,
+            })
+          }
+        }
+      }
     })
 
     return reply.send({
@@ -202,7 +298,19 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       labsAdded: labResults.length,
       medsAdded: medications.length,
       vitalsAdded: vitals.length,
+      imagingAdded,
     })
+  })
+
+  app.get('/imaging-reports', async (request, reply) => {
+    const userId = request.session.userId!
+    const rows = await db
+      .select()
+      .from(schema.imagingReports)
+      .where(eq(schema.imagingReports.userId, userId))
+      .orderBy(desc(schema.imagingReports.examAt))
+      .limit(100)
+    return reply.send({ imagingReports: rows })
   })
 
   app.get('/lab-results', async (request, reply) => {
