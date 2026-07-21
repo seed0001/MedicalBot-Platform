@@ -30,9 +30,12 @@ const envSchema = z.object({
     .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)')
     .optional(),
 
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  // Trimmed: a trailing space or newline pasted into a Railway variable would
+  // otherwise be URL-encoded into the OAuth request and make Google reject it
+  // with a generic 400 "malformed request".
+  GOOGLE_CLIENT_ID: z.string().trim().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
+  GOOGLE_REDIRECT_URI: z.string().trim().url().optional(),
 
   /**
    * The software operator's Google email. On login this account is promoted to
