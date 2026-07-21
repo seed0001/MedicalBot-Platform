@@ -10,10 +10,15 @@ export const metadata: Metadata = {
   description: PRODUCT_DESCRIPTION_SHORT,
 }
 
+// Applies the saved theme before first paint so there is no flash of the wrong
+// theme. No stored choice → the CSS falls back to the OS preference.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('medbot_theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <Providers>
           <Nav />
           {children}
