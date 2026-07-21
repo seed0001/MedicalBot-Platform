@@ -1,5 +1,8 @@
 'use client'
 
+import { useRef, useState } from 'react'
+import { formatDateTime } from '@/lib/format'
+
 export interface Point {
   t: number
   v: number
@@ -10,6 +13,14 @@ export interface ChartSeries {
   label: string
   points: Point[]
   tone?: 'primary' | 'secondary'
+}
+
+interface TooltipState {
+  label: string
+  value: number
+  t: number
+  x: number
+  y: number
 }
 
 /**
@@ -32,6 +43,9 @@ export function LineChart({
   unit?: string | null
   height?: number
 }) {
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [tip, setTip] = useState<TooltipState | null>(null)
+
   const lines: ChartSeries[] =
     series ??
     (points ? [{ id: 'main', label: '', points, tone: 'primary' }] : [])
@@ -71,14 +85,41 @@ export function LineChart({
   const bandBottom = typeof targetMin === 'number' ? y(targetMin) : null
 
   const ticks = [minY, (minY + maxY) / 2, maxY]
-  const fmtDate = (t: number) =>
-    new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const fmtAxisDate = (t: number) =>
+    new Date(t).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
 
   const showLegend = lines.length > 1 && lines.some((s) => s.label)
 
+  function showTip(s: ChartSeries, p: Point, svgX: number, svgY: number) {
+    const svg = svgRef.current
+    const wrap = svg?.parentElement
+    if (!svg || !wrap) return
+    const svgRect = svg.getBoundingClientRect()
+    const wrapRect = wrap.getBoundingClientRect()
+    const scaleX = svgRect.width / width
+    const scaleY = svgRect.height / height
+    setTip({
+      label: s.label,
+      value: p.v,
+      t: p.t,
+      x: svgX * scaleX + svgRect.left - wrapRect.left,
+      y: svgY * scaleY + svgRect.top - wrapRect.top,
+    })
+  }
+
+  function formatValue(v: number, label: string) {
+    const suffix = unit ? ` ${unit}` : ''
+    if (label) return `${label}: ${v}${suffix}`
+    return `${v}${suffix}`
+  }
+
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} className="chart" role="img">
+      <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="chart" role="img">
         {bandTop !== null && bandBottom !== null && (
           <rect
             x={padL}
@@ -112,26 +153,46 @@ export function LineChart({
             <g key={s.id}>
               <path d={path} className={lineClass} fill="none" />
               {sorted.length <= 60 &&
-                sorted.map((p) => (
-                  <circle
-                    key={`${s.id}-${p.t}`}
-                    cx={x(p.t)}
-                    cy={y(p.v)}
-                    r={2.5}
-                    className={dotClass}
-                  />
-                ))}
+                sorted.map((p, i) => {
+                  const cx = x(p.t)
+                  const cy = y(p.v)
+                  return (
+                    <g key={`${s.id}-${p.t}-${i}`}>
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={10}
+                        className="chart-hit"
+                        onMouseEnter={() => showTip(s, p, cx, cy)}
+                        onMouseLeave={() => setTip(null)}
+                      />
+                      <circle cx={cx} cy={cy} r={2.5} className={dotClass} pointerEvents="none" />
+                    </g>
+                  )
+                })}
             </g>
           )
         })}
 
         <text x={padL} y={height - 6} className="chart-label">
-          {fmtDate(minX)}
+          {fmtAxisDate(minX)}
         </text>
         <text x={width - padR} y={height - 6} className="chart-label" textAnchor="end">
-          {fmtDate(maxX)}
+          {fmtAxisDate(maxX)}
         </text>
       </svg>
+
+      {tip && (
+        <div
+          className="chart-tooltip"
+          style={{ left: tip.x, top: tip.y }}
+          role="tooltip"
+        >
+          <strong>{formatValue(tip.value, tip.label)}</strong>
+          <span>{formatDateTime(tip.t)}</span>
+        </div>
+      )}
+
       {showLegend && (
         <div className="chart-legend" aria-hidden="true">
           {lines.map((s) => (

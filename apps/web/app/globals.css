@@ -532,7 +532,7 @@ select, .confirm-field input {
 
 /* ---------- chart ---------- */
 
-.chart-wrap { margin: 0.5rem 0; }
+.chart-wrap { margin: 0.5rem 0; position: relative; }
 
 .chart {
   width: 100%;
@@ -580,6 +580,38 @@ select, .confirm-field input {
 
 .chart-legend-swatch.secondary {
   background: var(--warn);
+}
+
+.chart-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.chart-tooltip strong {
+  color: var(--text);
+}
+
+.chart-tooltip span {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .chart-grid {
