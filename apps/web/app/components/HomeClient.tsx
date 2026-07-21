@@ -31,22 +31,35 @@ export function HomeClient() {
   const [showSignupTerms, setShowSignupTerms] = useState(false)
   const [demoAvailable, setDemoAvailable] = useState(false)
   const [demoBusy, setDemoBusy] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadSession = useCallback(async () => {
-    const [legalRes, meRes, healthRes] = await Promise.all([
-      apiFetch('/legal'),
-      apiFetch('/auth/me'),
-      apiFetch('/health'),
-    ])
-    if (legalRes.ok) setLegal(await legalRes.json())
-    if (meRes.ok) setUser(await meRes.json())
-    else setUser(null)
-    // The demo entry point only appears when the API actually has DEMO_MODE on.
-    if (healthRes.ok) {
-      const health = (await healthRes.json()) as { checks?: { demoMode?: boolean } }
-      setDemoAvailable(Boolean(health.checks?.demoMode))
+    setLoadError(null)
+    try {
+      const [legalRes, meRes, healthRes] = await Promise.all([
+        apiFetch('/legal'),
+        apiFetch('/auth/me'),
+        apiFetch('/health'),
+      ])
+      if (legalRes.ok) setLegal(await legalRes.json())
+      else {
+        setLoadError(
+          'Could not reach the API. Start it with npm run dev:api (port 3001), then refresh.',
+        )
+      }
+      if (meRes.ok) setUser(await meRes.json())
+      else setUser(null)
+      if (healthRes.ok) {
+        const health = (await healthRes.json()) as { checks?: { demoMode?: boolean } }
+        setDemoAvailable(Boolean(health.checks?.demoMode))
+      }
+    } catch {
+      setLoadError(
+        'Could not reach the API. Start it with npm run dev:api (port 3001), then refresh.',
+      )
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   const enterDemo = useCallback(async () => {
@@ -81,8 +94,21 @@ export function HomeClient() {
     setSignupAgreed(false)
   }
 
-  if (loading || !legal) {
+  if (loading) {
     return <p className="muted">Loading…</p>
+  }
+
+  if (loadError || !legal) {
+    return (
+      <div className="notice">
+        <strong>API not reachable</strong>
+        <p>{loadError ?? 'The backend did not respond.'}</p>
+        <p className="hint">
+          In development, run <code>npm run dev:api</code> in one terminal and{' '}
+          <code>npm run dev:web</code> in another, then refresh this page.
+        </p>
+      </div>
+    )
   }
 
   const signedIn = Boolean(user)
