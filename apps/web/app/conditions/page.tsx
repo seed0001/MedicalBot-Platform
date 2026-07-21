@@ -1,7 +1,14 @@
 'use client'
 
+import { useState } from 'react'
+import { AppGate } from '../components/AppGate'
+import { Modal } from '../components/Modal'
+import { useToast } from '../components/Toast'
 import { Loaded } from '../components/Loader'
+import { apiPost, apiDelete } from '@/lib/api'
 import { METRIC_LABELS, formatDate, titleCase } from '@/lib/format'
+import { CONDITION_KEYS, CONDITION_LABELS, getConditionReference } from '@medbot/shared'
+import type { ConditionKey } from '@medbot/shared'
 
 interface TrackedMetric {
   type: string
@@ -46,101 +53,285 @@ function describeThreshold(t: Threshold): string {
   return `${label} ${dir} ${t.threshold}, ${t.occurrences}× within ${window}`
 }
 
-export default function ConditionsPage() {
+/** Patient-education panel, shown when the glossary has a reference for this key. */
+function ConditionEducation({ conditionKey }: { conditionKey: string }) {
+  const ref = getConditionReference(conditionKey as ConditionKey)
+  if (!ref) return null
+
   return (
-    <main>
-      <h1>Conditions</h1>
-      <p className="muted">
-        Each condition loads a module that decides what gets tracked and what the target
-        ranges are. Where two conditions track the same metric, the stricter band wins.
-      </p>
+    <details className="stack">
+      <summary>Learn about this condition</summary>
+      <p className="hint">General patient education — background to help you prepare questions, not medical advice.</p>
 
-      <Loaded<{ conditions: Condition[] }> path="/api/conditions">
-        {(d) => (
-          <div className="stack">
-            {d.conditions.map((c) => (
-              <div key={c.id} className="card">
-                <div className="card-head">
-                  <div>
-                    <h2>{c.label}</h2>
-                    <p className="hint">
-                      {titleCase(c.status)}
-                      {c.diagnosedAt && ` · diagnosed ${formatDate(c.diagnosedAt)}`}
-                    </p>
-                  </div>
-                  {!c.hasModule && <span className="badge badge-warn">No module yet</span>}
-                </div>
+      <h3>What it means</h3>
+      <p>{ref.whatItMeans}</p>
 
-                {c.summary && <p>{c.summary}</p>}
-                {c.notes && <p className="hint">{c.notes}</p>}
+      <h3>Common symptoms</h3>
+      <ul className="plain-list">
+        {ref.commonSymptoms.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
+      </ul>
 
-                {!c.hasModule ? (
-                  <p className="hint">
-                    Recorded on your profile, but nothing tracks it automatically yet. Adding a
-                    module is one new file in <code>packages/conditions</code>.
-                  </p>
-                ) : (
-                  <>
-                    <h3>Tracked metrics</h3>
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Metric</th>
-                            <th>Target</th>
-                            <th>Prompts / day</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {c.trackedMetrics.map((m) => (
-                            <tr key={m.type}>
-                              <td>{METRIC_LABELS[m.type] ?? m.type}</td>
-                              <td>
-                                {m.targetMin === null && m.targetMax === null
-                                  ? '—'
-                                  : `${m.targetMin ?? ''}${m.targetMin !== null && m.targetMax !== null ? '–' : ''}${m.targetMax ?? ''}`}
-                              </td>
-                              <td>{m.dailyPrompts === 0 ? 'When you log it' : m.dailyPrompts}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+      <h3>Why tracking matters</h3>
+      <p>{ref.whyTrackingMatters}</p>
 
-                    {c.thresholds.length > 0 && (
-                      <>
-                        <h3>Thresholds</h3>
-                        <ul className="plain-list">
-                          {c.thresholds.map((t) => (
-                            <li key={t.id}>
-                              <strong>{describeThreshold(t)}</strong>
-                              <span className="hint">{t.message}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
+      <h3>Questions for your doctor</h3>
+      <ul className="plain-list">
+        {ref.questionsForYourDoctor.map((q) => (
+          <li key={q}>{q}</li>
+        ))}
+      </ul>
 
-                    {c.trends.length > 0 && (
-                      <>
-                        <h3>Patterns worth watching</h3>
-                        <ul className="plain-list">
-                          {c.trends.map((t) => (
-                            <li key={t.id}>
-                              <strong>{t.description}</strong>
-                              <span className="hint">{t.detect}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
+      {ref.learnMore.length > 0 && (
+        <>
+          <h3>Learn more</h3>
+          <ul className="plain-list">
+            {ref.learnMore.map((l) => (
+              <li key={l.url}>
+                <a href={l.url} target="_blank" rel="noreferrer">
+                  {l.label}
+                </a>
+              </li>
             ))}
+          </ul>
+        </>
+      )}
+
+      <p className="hint">{ref.disclaimer}</p>
+    </details>
+  )
+}
+
+function ConditionCard({ c, onChanged }: { c: Condition; onChanged: () => void }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+
+  async function remove() {
+    if (busy) return
+    if (!window.confirm(`Remove ${c.label}? This stops tracking it and removes it from your profile.`)) return
+    setBusy(true)
+    try {
+      await apiDelete(`/api/conditions/${c.key}`)
+      toast.show(`${c.label} removed.`, 'ok')
+      onChanged()
+    } catch {
+      toast.show('Could not remove that condition.', 'err')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <h2>{c.label}</h2>
+          <p className="hint">
+            {titleCase(c.status)}
+            {c.diagnosedAt && ` · diagnosed ${formatDate(c.diagnosedAt)}`}
+          </p>
+        </div>
+        {!c.hasModule && <span className="badge badge-warn">No module yet</span>}
+      </div>
+
+      {c.summary && <p>{c.summary}</p>}
+      {c.notes && <p className="hint">{c.notes}</p>}
+
+      {!c.hasModule ? (
+        <p className="hint">
+          Recorded on your profile, but nothing tracks it automatically yet. Adding a
+          module is one new file in <code>packages/conditions</code>.
+        </p>
+      ) : (
+        <>
+          <h3>Tracked metrics</h3>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Target</th>
+                  <th>Prompts / day</th>
+                </tr>
+              </thead>
+              <tbody>
+                {c.trackedMetrics.map((m) => (
+                  <tr key={m.type}>
+                    <td>{METRIC_LABELS[m.type] ?? m.type}</td>
+                    <td>
+                      {m.targetMin === null && m.targetMax === null
+                        ? '—'
+                        : `${m.targetMin ?? ''}${m.targetMin !== null && m.targetMax !== null ? '–' : ''}${m.targetMax ?? ''}`}
+                    </td>
+                    <td>{m.dailyPrompts === 0 ? 'When you log it' : m.dailyPrompts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </Loaded>
-    </main>
+
+          {c.thresholds.length > 0 && (
+            <>
+              <h3>Thresholds</h3>
+              <ul className="plain-list">
+                {c.thresholds.map((t) => (
+                  <li key={t.id}>
+                    <strong>{describeThreshold(t)}</strong>
+                    <span className="hint">{t.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {c.trends.length > 0 && (
+            <>
+              <h3>Patterns worth watching</h3>
+              <ul className="plain-list">
+                {c.trends.map((t) => (
+                  <li key={t.id}>
+                    <strong>{t.description}</strong>
+                    <span className="hint">{t.detect}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+
+      <ConditionEducation conditionKey={c.key} />
+
+      <div className="btn-row">
+        <button type="button" className="btn-danger btn-sm" disabled={busy} onClick={remove}>
+          Remove
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ConditionForm({ onDone }: { onDone: () => void }) {
+  const [key, setKey] = useState<string>(CONDITION_KEYS[0])
+  const [diagnosedAt, setDiagnosedAt] = useState('')
+  const [status, setStatus] = useState('active')
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+
+    const body: Record<string, unknown> = { key, status }
+    if (diagnosedAt) body.diagnosedAt = diagnosedAt
+    if (notes.trim()) body.notes = notes.trim()
+
+    setBusy(true)
+    try {
+      await apiPost('/api/conditions', body)
+      onDone()
+    } catch {
+      setError('Could not add that condition. It may already be on your profile.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div className="form-grid">
+        <label className="field">
+          <span>Condition</span>
+          <select value={key} onChange={(e) => setKey(e.target.value)} autoFocus>
+            {CONDITION_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {CONDITION_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Diagnosed (optional)</span>
+          <input type="date" value={diagnosedAt} onChange={(e) => setDiagnosedAt(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="active">Active</option>
+            <option value="remission">Remission</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="field">
+        <span>Notes (optional)</span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Anything you want to remember about this diagnosis"
+          rows={3}
+        />
+      </label>
+
+      {error && <p className="field-error">{error}</p>}
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary" disabled={busy}>
+          {busy ? 'Saving…' : 'Add condition'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+export default function ConditionsPage() {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+  const refetch = () => setReloadKey((k) => k + 1)
+
+  return (
+    <AppGate>
+      <main>
+        <div className="page-header">
+          <h1>Conditions</h1>
+          <div className="page-actions">
+            <button type="button" className="btn-primary" onClick={() => setOpen(true)}>
+              + Add condition
+            </button>
+          </div>
+        </div>
+
+        <p className="muted">
+          Each condition loads a module that decides what gets tracked and what the target
+          ranges are. Where two conditions track the same metric, the stricter band wins.
+        </p>
+
+        <Loaded<{ conditions: Condition[] }> key={reloadKey} path="/api/conditions">
+          {(d) =>
+            d.conditions.length === 0 ? (
+              <div className="card">No conditions recorded yet.</div>
+            ) : (
+              <div className="stack">
+                {d.conditions.map((c) => (
+                  <ConditionCard key={c.id} c={c} onChanged={refetch} />
+                ))}
+              </div>
+            )
+          }
+        </Loaded>
+
+        <Modal open={open} title="Add condition" onClose={() => setOpen(false)} wide>
+          <ConditionForm
+            onDone={() => {
+              setOpen(false)
+              refetch()
+              toast.show('Condition added.', 'ok')
+            }}
+          />
+        </Modal>
+      </main>
+    </AppGate>
   )
 }

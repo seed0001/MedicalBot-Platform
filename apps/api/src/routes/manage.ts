@@ -1,0 +1,279 @@
+import type { FastifyInstance } from 'fastify'
+import { and, eq } from 'drizzle-orm'
+import { z } from 'zod'
+import {
+  ADHERENCE_STATUSES,
+  careTeamMemberSchema,
+  conditionSchema,
+  medicationSchema,
+  profileSchema,
+  scheduleSchema,
+} from '@medbot/shared'
+import { db, schema } from '../db/index.js'
+import { requireUser } from './auth.js'
+
+/**
+ * Write endpoints backing the interactive UI. Everything is scoped to the
+ * session user — no route here can read or mutate another account's records.
+ * Reads live in records.ts; this file is the mutation surface.
+ */
+
+/** `date` columns are YYYY-MM-DD strings, not timestamps. */
+const toDateStr = (d: Date | null | undefined): string | null =>
+  d ? d.toISOString().slice(0, 10) : null
+
+export async function manageRoutes(app: FastifyInstance): Promise<void> {
+  app.addHook('preHandler', requireUser)
+
+  // ---- Profile -----------------------------------------------------------
+
+  const profileUpdate = profileSchema.partial()
+
+  app.patch('/profile', async (request, reply) => {
+    const parsed = profileUpdate.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid profile', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const p = parsed.data
+
+    const set: Record<string, unknown> = { updatedAt: new Date() }
+    if (p.displayName !== undefined) set.displayName = p.displayName
+    if (p.dateOfBirth !== undefined) set.dateOfBirth = toDateStr(p.dateOfBirth)
+    if (p.sexAtBirth !== undefined) set.sexAtBirth = p.sexAtBirth
+    if (p.heightCm !== undefined) set.heightCm = p.heightCm === null ? null : String(p.heightCm)
+    if (p.timezone !== undefined) set.timezone = p.timezone
+    if (p.allergies !== undefined) set.allergies = p.allergies
+    if (p.emergencyContactName !== undefined) set.emergencyContactName = p.emergencyContactName
+    if (p.emergencyContactPhone !== undefined) set.emergencyContactPhone = p.emergencyContactPhone
+    if (p.preferredPharmacy !== undefined) set.preferredPharmacy = p.preferredPharmacy
+
+    await db.update(schema.profiles).set(set).where(eq(schema.profiles.userId, userId))
+    return reply.send({ ok: true })
+  })
+
+  // ---- Care team ---------------------------------------------------------
+
+  app.post('/care-team', async (request, reply) => {
+    const parsed = careTeamMemberSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid provider', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const [row] = await db
+      .insert(schema.careTeam)
+      .values({ userId, ...parsed.data })
+      .returning({ id: schema.careTeam.id })
+    return reply.code(201).send({ id: row!.id })
+  })
+
+  app.delete('/care-team/:id', async (request, reply) => {
+    const userId = request.session.userId!
+    const { id } = request.params as { id: string }
+    await db
+      .delete(schema.careTeam)
+      .where(and(eq(schema.careTeam.userId, userId), eq(schema.careTeam.id, id)))
+    return reply.send({ ok: true })
+  })
+
+  // ---- Conditions --------------------------------------------------------
+
+  app.post('/conditions', async (request, reply) => {
+    const parsed = conditionSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid condition', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const c = parsed.data
+    await db
+      .insert(schema.conditions)
+      .values({
+        userId,
+        key: c.key,
+        diagnosedAt: toDateStr(c.diagnosedAt),
+        status: c.status,
+        managingProviderId: c.managingProviderId,
+        notes: c.notes,
+      })
+      .onConflictDoUpdate({
+        target: [schema.conditions.userId, schema.conditions.key],
+        set: { status: c.status, diagnosedAt: toDateStr(c.diagnosedAt), notes: c.notes },
+      })
+    return reply.code(201).send({ ok: true })
+  })
+
+  app.delete('/conditions/:key', async (request, reply) => {
+    const userId = request.session.userId!
+    const { key } = request.params as { key: string }
+    await db
+      .delete(schema.conditions)
+      .where(and(eq(schema.conditions.userId, userId), eq(schema.conditions.key, key)))
+    return reply.send({ ok: true })
+  })
+
+  // ---- Medications -------------------------------------------------------
+
+  app.post('/medications', async (request, reply) => {
+    const parsed = medicationSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid medication', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const m = parsed.data
+    const [row] = await db
+      .insert(schema.medications)
+      .values({
+        userId,
+        name: m.name,
+        rxcui: m.rxcui,
+        dose: m.dose,
+        form: m.form,
+        schedule: m.schedule,
+        purpose: m.purpose,
+        prescriber: m.prescriber,
+        pharmacy: m.pharmacy,
+        startedAt: toDateStr(m.startedAt),
+        endedAt: toDateStr(m.endedAt),
+        refillsRemaining: m.refillsRemaining,
+        isActive: m.isActive,
+      })
+      .returning({ id: schema.medications.id })
+    return reply.code(201).send({ id: row!.id })
+  })
+
+  const medicationPatch = z.object({
+    isActive: z.boolean().optional(),
+    refillsRemaining: z.number().int().min(0).nullable().optional(),
+    pharmacy: z.string().max(200).nullable().optional(),
+    prescriber: z.string().max(200).nullable().optional(),
+    dose: z.string().min(1).max(100).optional(),
+    purpose: z.string().max(300).nullable().optional(),
+    schedule: scheduleSchema.optional(),
+    endedAt: z.coerce.date().nullable().optional(),
+  })
+
+  app.patch('/medications/:id', async (request, reply) => {
+    const parsed = medicationPatch.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid update', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const { id } = request.params as { id: string }
+    const u = parsed.data
+
+    const set: Record<string, unknown> = {}
+    if (u.isActive !== undefined) set.isActive = u.isActive
+    if (u.refillsRemaining !== undefined) set.refillsRemaining = u.refillsRemaining
+    if (u.pharmacy !== undefined) set.pharmacy = u.pharmacy
+    if (u.prescriber !== undefined) set.prescriber = u.prescriber
+    if (u.dose !== undefined) set.dose = u.dose
+    if (u.purpose !== undefined) set.purpose = u.purpose
+    if (u.schedule !== undefined) set.schedule = u.schedule
+    if (u.endedAt !== undefined) set.endedAt = toDateStr(u.endedAt)
+
+    if (Object.keys(set).length === 0) return reply.send({ ok: true })
+
+    await db
+      .update(schema.medications)
+      .set(set)
+      .where(and(eq(schema.medications.userId, userId), eq(schema.medications.id, id)))
+    return reply.send({ ok: true })
+  })
+
+  const adherenceBody = z.object({
+    status: z.enum(ADHERENCE_STATUSES),
+    scheduledFor: z.coerce.date().default(() => new Date()),
+    reason: z.string().max(500).nullable().default(null),
+  })
+
+  app.post('/medications/:id/adherence', async (request, reply) => {
+    const parsed = adherenceBody.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid adherence', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const { id } = request.params as { id: string }
+
+    // Confirm the med belongs to this user before writing an event against it.
+    const [med] = await db
+      .select({ id: schema.medications.id })
+      .from(schema.medications)
+      .where(and(eq(schema.medications.userId, userId), eq(schema.medications.id, id)))
+      .limit(1)
+    if (!med) return reply.code(404).send({ error: 'Medication not found' })
+
+    const { status, scheduledFor, reason } = parsed.data
+    await db
+      .insert(schema.adherenceEvents)
+      .values({ userId, medicationId: id, status, scheduledFor, reason })
+      // One event per dose slot — re-logging the same slot corrects it.
+      .onConflictDoUpdate({
+        target: [schema.adherenceEvents.medicationId, schema.adherenceEvents.scheduledFor],
+        set: { status, reason, recordedAt: new Date() },
+      })
+    return reply.code(201).send({ ok: true })
+  })
+
+  // ---- Appointments ------------------------------------------------------
+
+  const appointmentBody = z.object({
+    title: z.string().min(1).max(200),
+    type: z
+      .enum(['office_visit', 'lab', 'imaging', 'therapy', 'injection', 'procedure', 'other'])
+      .default('office_visit'),
+    startsAt: z.coerce.date(),
+    endsAt: z.coerce.date().nullable().default(null),
+    location: z.string().max(300).nullable().default(null),
+    providerId: z.string().uuid().nullable().default(null),
+    prepNotes: z.string().max(2000).nullable().default(null),
+  })
+
+  app.post('/appointments', async (request, reply) => {
+    const parsed = appointmentBody.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid appointment', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const a = parsed.data
+    const [row] = await db
+      .insert(schema.appointments)
+      .values({
+        userId,
+        title: a.title,
+        type: a.type,
+        startsAt: a.startsAt,
+        endsAt: a.endsAt,
+        location: a.location,
+        providerId: a.providerId,
+        prepNotes: a.prepNotes,
+      })
+      .returning({ id: schema.appointments.id })
+    return reply.code(201).send({ id: row!.id })
+  })
+
+  const appointmentPatch = z.object({
+    visitNotes: z.string().max(4000).nullable().optional(),
+    prepNotes: z.string().max(2000).nullable().optional(),
+    location: z.string().max(300).nullable().optional(),
+  })
+
+  app.patch('/appointments/:id', async (request, reply) => {
+    const parsed = appointmentPatch.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid update', issues: parsed.error.issues })
+    }
+    const userId = request.session.userId!
+    const { id } = request.params as { id: string }
+    const set: Record<string, unknown> = {}
+    if (parsed.data.visitNotes !== undefined) set.visitNotes = parsed.data.visitNotes
+    if (parsed.data.prepNotes !== undefined) set.prepNotes = parsed.data.prepNotes
+    if (parsed.data.location !== undefined) set.location = parsed.data.location
+    if (Object.keys(set).length === 0) return reply.send({ ok: true })
+
+    await db
+      .update(schema.appointments)
+      .set(set)
+      .where(and(eq(schema.appointments.userId, userId), eq(schema.appointments.id, id)))
+    return reply.send({ ok: true })
+  })
+}

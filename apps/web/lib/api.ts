@@ -34,6 +34,43 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body: unknown = {}): Promise<T> {
   const res = await apiFetch(path, { method: 'POST', body: JSON.stringify(body) })
   if (res.status === 401) throw new NotAuthenticated()
-  if (!res.ok) throw new Error(`${path} failed: ${res.status}`)
+  if (!res.ok) throw new ApiError(path, res.status, await safeBody(res))
   return (await res.json()) as T
+}
+
+export async function apiPatch<T>(path: string, body: unknown = {}): Promise<T> {
+  const res = await apiFetch(path, { method: 'PATCH', body: JSON.stringify(body) })
+  if (res.status === 401) throw new NotAuthenticated()
+  if (!res.ok) throw new ApiError(path, res.status, await safeBody(res))
+  return (await res.json()) as T
+}
+
+/**
+ * Fastify rejects an empty body sent with a JSON content-type, so a bodyless
+ * DELETE has to carry an empty object.
+ */
+export async function apiDelete<T>(path: string): Promise<T> {
+  const res = await apiFetch(path, { method: 'DELETE', body: '{}' })
+  if (res.status === 401) throw new NotAuthenticated()
+  if (!res.ok) throw new ApiError(path, res.status, await safeBody(res))
+  return (await res.json()) as T
+}
+
+export class ApiError extends Error {
+  constructor(
+    public path: string,
+    public status: number,
+    public body: unknown,
+  ) {
+    super(`${path} failed: ${status}`)
+    this.name = 'ApiError'
+  }
+}
+
+async function safeBody(res: Response): Promise<unknown> {
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
 }

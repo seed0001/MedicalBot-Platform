@@ -70,3 +70,74 @@ export function titleCase(value: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 }
+
+export const ROLE_LABELS: Record<string, string> = {
+  primary_care: 'Primary care',
+  endocrinologist: 'Endocrinologist',
+  psychiatrist: 'Psychiatrist',
+  therapist: 'Therapist',
+  cardiologist: 'Cardiologist',
+  nephrologist: 'Nephrologist',
+  neurologist: 'Neurologist',
+  pharmacist: 'Pharmacist',
+  case_manager: 'Case manager',
+  other: 'Other',
+}
+
+export const APPT_TYPE_LABELS: Record<string, string> = {
+  office_visit: 'Office visit',
+  lab: 'Lab',
+  imaging: 'Imaging',
+  therapy: 'Therapy',
+  injection: 'Injection',
+  procedure: 'Procedure',
+  other: 'Other',
+}
+
+export const MED_FORM_LABELS: Record<string, string> = {
+  tablet: 'Tablet',
+  capsule: 'Capsule',
+  liquid: 'Liquid',
+  injection: 'Injection',
+  inhaler: 'Inhaler',
+  patch: 'Patch',
+  topical: 'Topical',
+  other: 'Other',
+}
+
+export const ADHERENCE_LABELS: Record<string, string> = {
+  taken: 'Taken',
+  late: 'Late',
+  skipped: 'Skipped',
+  missed: 'Missed',
+}
+
+/** Canonical unit per metric type, for showing next to entry fields. */
+export const METRIC_UNITS: Record<string, string> = {
+  blood_glucose: 'mg/dL',
+  weight: 'kg',
+  blood_pressure: 'mmHg',
+  heart_rate: 'bpm',
+  a1c: '%',
+  temperature: '°C',
+  spo2: '%',
+  sleep_hours: 'h',
+  sleep_quality: '1–10',
+  mood: '1–10',
+  anxiety: '1–10',
+  pain: '0–10',
+  steps: 'steps',
+  water_intake: 'mL',
+  symptom_severity: '0–10',
+  side_effect_severity: '0–10',
+  questionnaire_score: 'points',
+  lab_value: '',
+}
+
+/** Round-trips a stored ISO date into the value an <input type="date"> wants. */
+export function toDateInput(value: string | Date | null): string {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(+d)) return ''
+  return d.toISOString().slice(0, 10)
+}

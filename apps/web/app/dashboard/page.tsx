@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loaded } from '../components/Loader'
-import { apiGet } from '@/lib/api'
+import Link from 'next/link'
+import { AppGate } from '../components/AppGate'
+import { Modal } from '../components/Modal'
+import { MetricEntryForm } from '../components/MetricEntryForm'
+import { useToast } from '../components/Toast'
+import { apiGet, NotAuthenticated } from '@/lib/api'
 import { METRIC_LABELS, formatMetric } from '@/lib/format'
 
 interface Tile {
@@ -38,53 +42,91 @@ interface Dashboard {
 }
 
 export default function DashboardPage() {
-  // Soft gate: a signed-in user who hasn't completed intake has no data to show,
-  // so send them to setup before rendering the (empty) dashboard. Unauthenticated
-  // users fall through to Loaded, which shows the "not signed in" state.
-  const [gate, setGate] = useState<'checking' | 'ok'>('checking')
+  const toast = useToast()
+  const [data, setData] = useState<Dashboard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [logging, setLogging] = useState(false)
 
+  // Refetch on reloadKey so a freshly logged reading shows up without a reload.
   useEffect(() => {
     let cancelled = false
-    apiGet<{ onboardedAt: string | null }>('/auth/me')
-      .then((me) => {
-        if (cancelled) return
-        if (!me.onboardedAt) window.location.href = '/onboarding'
-        else setGate('ok')
+    setData(null)
+    setError(null)
+    apiGet<Dashboard>('/api/dashboard')
+      .then((d) => {
+        if (!cancelled) setData(d)
       })
-      .catch(() => {
-        // Not signed in or API down: let Loaded render the appropriate state.
-        if (!cancelled) setGate('ok')
+      .catch((e) => {
+        if (!cancelled) {
+          setError(
+            e instanceof NotAuthenticated ? 'Not signed in.' : 'Could not load your dashboard.',
+          )
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [])
-
-  if (gate === 'checking') {
-    return (
-      <main>
-        <p className="hint">Loading…</p>
-      </main>
-    )
-  }
+  }, [reloadKey])
 
   return (
-    <main>
-      <Loaded<Dashboard> path="/api/dashboard">
-        {(d) => (
+    <AppGate>
+      <main>
+        {error && <div className="card">{error}</div>}
+        {!data && !error && <p className="hint">Loading…</p>}
+
+        {data && (
           <>
-            <h1>Hello, {d.displayName}</h1>
-            <p className="muted">
-              Tracking {d.conditions.map((c) => c.label).join(' and ') || 'no conditions yet'}.
-            </p>
+            <div className="page-header">
+              <div>
+                <h1>Hello, {data.displayName}</h1>
+                <p className="muted">
+                  Tracking{' '}
+                  {data.conditions.map((c) => c.label).join(' and ') || 'no conditions yet'}.
+                </p>
+              </div>
+              <div className="page-actions">
+                <button type="button" className="btn-primary" onClick={() => setLogging(true)}>
+                  + Log reading
+                </button>
+              </div>
+            </div>
+
+            <div className="quick-actions">
+              <button type="button" className="action-card" onClick={() => setLogging(true)}>
+                <span className="action-icon">🩸</span>
+                <span className="action-title">Log a reading</span>
+                <span className="action-sub">Record a metric right now</span>
+              </button>
+              <Link href="/assessments" className="action-card">
+                <span className="action-icon">📝</span>
+                <span className="action-title">Take an assessment</span>
+                <span className="action-sub">Check in on how you're doing</span>
+              </Link>
+              <Link href="/medications" className="action-card">
+                <span className="action-icon">💊</span>
+                <span className="action-title">Manage medications</span>
+                <span className="action-sub">Doses, schedules, and refills</span>
+              </Link>
+              <Link href="/appointments" className="action-card">
+                <span className="action-icon">📅</span>
+                <span className="action-title">Appointments</span>
+                <span className="action-sub">Upcoming visits and prep</span>
+              </Link>
+              <Link href="/assistant" className="action-card">
+                <span className="action-icon">💬</span>
+                <span className="action-title">Chat with the assistant</span>
+                <span className="action-sub">Ask about your tracked patterns</span>
+              </Link>
+            </div>
 
             <section>
               <h2>Last 7 days</h2>
-              {d.tiles.every((t) => t.count7d === 0) ? (
+              {data.tiles.every((t) => t.count7d === 0) ? (
                 <p className="hint">No readings in the last week.</p>
               ) : (
                 <div className="tile-grid">
-                  {d.tiles
+                  {data.tiles
                     .filter((t) => t.count7d > 0)
                     .map((t) => (
                       <div key={t.type} className="tile">
@@ -117,14 +159,14 @@ export default function DashboardPage() {
               <div className="tile-grid">
                 <div className="tile">
                   <span className="tile-label">Adherence, 30 days</span>
-                  <span className="tile-value">{Math.round(d.adherence.rate30d * 100)}%</span>
+                  <span className="tile-value">{Math.round(data.adherence.rate30d * 100)}%</span>
                   <span className="hint">
-                    {d.adherence.missed30d} of {d.adherence.doses30d} doses missed or skipped
+                    {data.adherence.missed30d} of {data.adherence.doses30d} doses missed or skipped
                   </span>
                 </div>
                 <div className="tile">
                   <span className="tile-label">Active medications</span>
-                  <span className="tile-value">{d.adherence.activeMedications}</span>
+                  <span className="tile-value">{data.adherence.activeMedications}</span>
                   <span className="hint">
                     <a href="/medications">See the breakdown</a>
                   </span>
@@ -134,11 +176,11 @@ export default function DashboardPage() {
 
             <section>
               <h2>Coming up</h2>
-              {d.upcomingAppointments.length === 0 ? (
+              {data.upcomingAppointments.length === 0 ? (
                 <p className="hint">Nothing scheduled.</p>
               ) : (
                 <ul className="plain-list">
-                  {d.upcomingAppointments.map((a) => (
+                  {data.upcomingAppointments.map((a) => (
                     <li key={a.id}>
                       <strong>{a.title}</strong>
                       <span className="hint">
@@ -158,7 +200,22 @@ export default function DashboardPage() {
             </section>
           </>
         )}
-      </Loaded>
-    </main>
+
+        <Modal
+          open={logging}
+          title="Log a reading"
+          onClose={() => setLogging(false)}
+          wide
+        >
+          <MetricEntryForm
+            onDone={() => {
+              setLogging(false)
+              setReloadKey((k) => k + 1)
+              toast.show('Reading logged.')
+            }}
+          />
+        </Modal>
+      </main>
+    </AppGate>
   )
 }

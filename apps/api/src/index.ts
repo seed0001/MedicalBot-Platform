@@ -12,6 +12,8 @@ import { authRoutes } from './routes/auth.js'
 import { dashboardRoutes } from './routes/dashboard.js'
 import { demoRoutes } from './routes/demo.js'
 import { legalRoutes } from './routes/legal.js'
+import { assessmentRoutes } from './routes/assessments.js'
+import { manageRoutes } from './routes/manage.js'
 import { metricRoutes } from './routes/metrics.js'
 import { onboardingRoutes } from './routes/onboarding.js'
 import { recordRoutes } from './routes/records.js'
@@ -76,6 +78,8 @@ await app.register(dashboardRoutes, { prefix: '/api' })
 await app.register(recordRoutes, { prefix: '/api' })
 await app.register(metricRoutes, { prefix: '/api' })
 await app.register(onboardingRoutes, { prefix: '/api' })
+await app.register(manageRoutes, { prefix: '/api' })
+await app.register(assessmentRoutes, { prefix: '/api' })
 
 // Migrations run in-process for both drivers so deployment never depends on
 // drizzle-kit being present at runtime (it is a devDependency and gets pruned).
