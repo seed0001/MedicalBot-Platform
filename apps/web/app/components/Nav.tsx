@@ -16,8 +16,15 @@ const LINKS = [
 
 export function Nav() {
   const pathname = usePathname()
-  // The marketing page and legal pages render without the app chrome.
-  if (pathname === '/' || pathname === '/terms' || pathname === '/privacy') return null
+  // The marketing page, legal pages, and the signup intake flow render without
+  // the app chrome — intake is a focused, gated step, not a browsable section.
+  if (
+    pathname === '/' ||
+    pathname === '/terms' ||
+    pathname === '/privacy' ||
+    pathname === '/onboarding'
+  )
+    return null
 
   return (
     <nav className="app-nav">

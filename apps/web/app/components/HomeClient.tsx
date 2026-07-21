@@ -20,6 +20,7 @@ interface MeResponse {
   id: string
   email: string
   needsTermsAcceptance: boolean
+  onboardedAt: string | null
 }
 
 export function HomeClient() {
@@ -86,6 +87,9 @@ export function HomeClient() {
 
   const signedIn = Boolean(user)
   const needsAcceptance = signedIn && user!.needsTermsAcceptance
+  // Terms come first; once accepted, an un-onboarded user is sent to intake
+  // rather than a dashboard that has nothing to show yet.
+  const needsOnboarding = signedIn && !needsAcceptance && !user!.onboardedAt
 
   return (
     <>
@@ -102,11 +106,22 @@ export function HomeClient() {
       {signedIn ? (
         <div className="card">
           <p>Signed in as <strong>{user!.email}</strong></p>
-          <p>
-            <Link className="btn-primary" href="/dashboard">
-              Open the dashboard
-            </Link>
-          </p>
+          {needsOnboarding ? (
+            <>
+              <p className="hint">One quick step left before your dashboard is ready.</p>
+              <p>
+                <Link className="btn-primary" href="/onboarding">
+                  Finish setting up your account
+                </Link>
+              </p>
+            </>
+          ) : (
+            <p>
+              <Link className="btn-primary" href="/dashboard">
+                Open the dashboard
+              </Link>
+            </p>
+          )}
           <button type="button" className="btn-secondary" onClick={() => void signOut()}>
             Sign out
           </button>

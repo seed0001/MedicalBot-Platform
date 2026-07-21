@@ -1,6 +1,8 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Loaded } from '../components/Loader'
+import { apiGet } from '@/lib/api'
 import { METRIC_LABELS, formatMetric } from '@/lib/format'
 
 interface Tile {
@@ -36,6 +38,36 @@ interface Dashboard {
 }
 
 export default function DashboardPage() {
+  // Soft gate: a signed-in user who hasn't completed intake has no data to show,
+  // so send them to setup before rendering the (empty) dashboard. Unauthenticated
+  // users fall through to Loaded, which shows the "not signed in" state.
+  const [gate, setGate] = useState<'checking' | 'ok'>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+    apiGet<{ onboardedAt: string | null }>('/auth/me')
+      .then((me) => {
+        if (cancelled) return
+        if (!me.onboardedAt) window.location.href = '/onboarding'
+        else setGate('ok')
+      })
+      .catch(() => {
+        // Not signed in or API down: let Loaded render the appropriate state.
+        if (!cancelled) setGate('ok')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (gate === 'checking') {
+    return (
+      <main>
+        <p className="hint">Loading…</p>
+      </main>
+    )
+  }
+
   return (
     <main>
       <Loaded<Dashboard> path="/api/dashboard">
