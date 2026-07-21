@@ -771,6 +771,13 @@ select {
   margin: 0.15rem 0 0;
 }
 
+input.field-error-input,
+select.field-error-input,
+textarea.field-error-input {
+  border-color: var(--urgent);
+  outline-color: var(--urgent);
+}
+
 /* ---------- segmented control ---------- */
 
 .segmented {

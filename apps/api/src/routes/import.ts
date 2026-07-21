@@ -98,7 +98,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           flag: z.enum(LAB_FLAGS).nullish(),
           panelName: z.string().nullish(),
           loinc: z.string().nullish(),
-          collectedAt: z.string().nullish(),
+          collectedAt: z.string().min(1, 'Collection date is required'),
         }),
       )
       .default([]),
@@ -120,7 +120,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           value: z.number(),
           valueSecondary: z.number().nullish(),
           unit: z.string().nullish(),
-          at: z.string().nullish(),
+          at: z.string().min(1, 'Date is required'),
         }),
       )
       .default([]),
@@ -159,6 +159,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           sourceDocument: sourceDocument ?? null,
         })
         const collectedAt = toDate(enriched.collectedAt)
+        if (!collectedAt) continue
         await tx.insert(schema.labResults).values({
           userId,
           testName: enriched.testName,
@@ -181,7 +182,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
             type: 'lab_value',
             value: String(n),
             unit: enriched.unit ?? 'varies',
-            recordedAt: collectedAt ?? new Date(),
+            recordedAt: collectedAt,
             source: 'lab_upload',
             context: enriched.testName,
             note: enriched.referenceText ?? enriched.note ?? null,
@@ -211,11 +212,13 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       }
 
       for (const v of vitals) {
+        const recordedAt = toDate(v.at)
+        if (!recordedAt) continue
         const entry = normalizeMetricInput({
           type: v.type as never,
           value: v.value,
           valueSecondary: v.valueSecondary ?? null,
-          recordedAt: toDate(v.at) ?? undefined,
+          recordedAt,
         })
         await tx.insert(schema.metrics).values({
           userId,

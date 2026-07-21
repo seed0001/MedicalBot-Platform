@@ -19,7 +19,8 @@ Enrichment helpers: `packages/shared/src/labs.ts`
 | Patient DOB | Printed in header | optional `notes` only — not required for import |
 | Table pagination | `Table 1 of 4` | informational; extractor must read all pages |
 
-**Rule:** Trend reports fan out to **one `lab_results` row per test × collection date**, not one row per test.
+- **Lab trend reports** fan out to **one `lab_results` row per test × collection date**, not one row per test.
+- **`collectedAt` is required** on every row — use the column header date (ISO `YYYY-MM-DD`). Without it, results cannot be charted.
 
 ---
 

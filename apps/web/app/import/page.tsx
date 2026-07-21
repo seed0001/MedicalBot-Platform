@@ -82,6 +82,18 @@ interface Parsed {
 
 type Phase = 'idle' | 'parsing' | 'review' | 'committing'
 
+/** ISO or date string → YYYY-MM-DD for <input type="date"> */
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const head = iso.trim().slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(head) ? head : ''
+}
+
+function fromDateInputValue(value: string): string | null {
+  const v = value.trim()
+  return v ? v : null
+}
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader()
@@ -152,9 +164,23 @@ export default function ImportPage() {
         comparisonNote: parsed.comparisonNote,
         notes: parsed.notes,
       })
-      setLabs(parsed.labResults.map((l) => ({ ...l, include: true })))
+      setLabs(
+        parsed.labResults.map((l) => ({
+          ...l,
+          include: true,
+          collectedAt:
+            l.collectedAt ??
+            (parsed.documentType !== 'lab_trends' ? parsed.documentDate : null),
+        })),
+      )
       setMeds(parsed.medications.map((m) => ({ ...m, include: true })))
-      setVitals(parsed.vitals.map((v) => ({ ...v, include: true })))
+      setVitals(
+        parsed.vitals.map((v) => ({
+          ...v,
+          include: true,
+          at: v.at ?? parsed.documentDate,
+        })),
+      )
       setImagingMeasurements(parsed.imagingMeasurements.map((m) => ({ ...m, include: true })))
       setImagingFindings(parsed.imagingFindings.map((f) => ({ ...f, include: true })))
       setImagingConclusions(parsed.imagingConclusions.map((text) => ({ text, include: true })))
@@ -180,6 +206,19 @@ export default function ImportPage() {
   }
 
   async function commit() {
+    const selectedLabs = labs.filter((l) => l.include)
+    const selectedVitals = vitals.filter((v) => v.include)
+    const labsWithoutDate = selectedLabs.filter((l) => !l.collectedAt)
+    const vitalsWithoutDate = selectedVitals.filter((v) => !v.at)
+
+    if (labsWithoutDate.length > 0 || vitalsWithoutDate.length > 0) {
+      toast.show(
+        'Every selected lab and vital needs a collection date before saving — charting requires it.',
+        'err',
+      )
+      return
+    }
+
     setPhase('committing')
     const selectedMeasurements = imagingMeasurements.filter((m) => m.include)
     const selectedFindings = imagingFindings.filter((f) => f.include)
@@ -265,6 +304,10 @@ export default function ImportPage() {
     imagingConclusions.length > 0 ||
     diagnoses.length > 0
 
+  const selectedLabsMissingDate = labs.filter((l) => l.include && !l.collectedAt).length
+  const selectedVitalsMissingDate = vitals.filter((v) => v.include && !v.at).length
+  const hasDateGaps = selectedLabsMissingDate > 0 || selectedVitalsMissingDate > 0
+
   return (
     <AppGate>
       <main>
@@ -347,10 +390,24 @@ export default function ImportPage() {
                 <p>We couldn't find labs, medications, vitals, or imaging data in that document.</p>
               </div>
             ) : (
-              <p className="hint">
-                Review what we found, fix anything that looks off, and untick anything you don't
-                want. Nothing is saved until you press “Save selected”.
-              </p>
+              <>
+                <p className="hint">
+                  Review what we found, fix anything that looks off, and untick anything you don't
+                  want. Nothing is saved until you press “Save selected”.
+                </p>
+                {hasDateGaps && (
+                  <div className="callout danger">
+                    <strong>Missing dates.</strong>
+                    <p>
+                      {selectedLabsMissingDate > 0 &&
+                        `${selectedLabsMissingDate} lab result(s) `}
+                      {selectedLabsMissingDate > 0 && selectedVitalsMissingDate > 0 && 'and '}
+                      {selectedVitalsMissingDate > 0 && `${selectedVitalsMissingDate} vital(s) `}
+                      need a collection date before you can save — otherwise they cannot be charted.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {diagnoses.length > 0 && (
@@ -492,6 +549,7 @@ export default function ImportPage() {
                     <thead>
                       <tr>
                         <th>Add</th>
+                        <th>Date</th>
                         <th>Test</th>
                         <th>Value</th>
                         <th>Unit</th>
@@ -509,6 +567,22 @@ export default function ImportPage() {
                               onChange={(e) =>
                                 setLabs((p) => p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)))
                               }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="date"
+                              value={toDateInputValue(l.collectedAt)}
+                              onChange={(e) =>
+                                setLabs((p) =>
+                                  p.map((x, j) =>
+                                    j === i ? { ...x, collectedAt: fromDateInputValue(e.target.value) } : x,
+                                  ),
+                                )
+                              }
+                              className={l.include && !l.collectedAt ? 'field-error-input' : undefined}
+                              required={l.include}
+                              aria-label={`Collection date for ${l.testName}`}
                             />
                           </td>
                           <td>
@@ -612,6 +686,7 @@ export default function ImportPage() {
                     <thead>
                       <tr>
                         <th>Add</th>
+                        <th>Date</th>
                         <th>Type</th>
                         <th>Value</th>
                       </tr>
@@ -626,6 +701,22 @@ export default function ImportPage() {
                               onChange={(e) =>
                                 setVitals((p) => p.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)))
                               }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="date"
+                              value={toDateInputValue(v.at)}
+                              onChange={(e) =>
+                                setVitals((p) =>
+                                  p.map((x, j) =>
+                                    j === i ? { ...x, at: fromDateInputValue(e.target.value) } : x,
+                                  ),
+                                )
+                              }
+                              className={v.include && !v.at ? 'field-error-input' : undefined}
+                              required={v.include}
+                              aria-label={`Date for ${METRIC_LABELS[v.type] ?? v.type}`}
                             />
                           </td>
                           <td>{METRIC_LABELS[v.type] ?? v.type}</td>
@@ -647,7 +738,7 @@ export default function ImportPage() {
                   type="button"
                   className="btn-primary"
                   onClick={commit}
-                  disabled={phase === 'committing' || selectedCount === 0}
+                  disabled={phase === 'committing' || selectedCount === 0 || hasDateGaps}
                 >
                   {phase === 'committing' ? 'Saving…' : `Save selected (${selectedCount})`}
                 </button>

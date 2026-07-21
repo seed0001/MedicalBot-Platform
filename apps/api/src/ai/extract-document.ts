@@ -124,7 +124,8 @@ vitals item shape:
 Rules:
 - For "vitals.type" use: blood_pressure, heart_rate, weight, temperature, spo2, blood_glucose. For blood_pressure put systolic in "value" and diastolic in "valueSecondary". Use exam date for "at" when printed.
 
-- **Lab trend reports** (portal "Result Trends", rows = tests, columns = dates): documentType "lab_trends". One labResults row per test per collection date. Copy High/Low flags. panelName from report title.
+- **Lab trend reports** (portal "Result Trends", rows = tests, columns = dates): documentType "lab_trends". One labResults row per test per collection date column — not one row per test. Copy High/Low flags. panelName from report title. **collectedAt is REQUIRED on every row** — use the ISO date (YYYY-MM-DD) from that column's header (e.g. "Feb 1, 2023" → "2023-02-01", "Jul 14, 2026" → "2026-07-14"). Never omit collectedAt on trend rows.
+- Single lab reports (one draw date): set the same collectedAt on every row from the collection or report date printed on the document.
 
 - **Imaging reports — especially echocardiograms (TTE)**:
   - documentType "imaging_report"; imagingModality "echo" for transthoracic echo.
@@ -197,9 +198,38 @@ const num = (v: unknown): number | null =>
       : null
 
 function normalize(d: Record<string, unknown>): ExtractedDocument {
+  const documentType = str(d.documentType) ?? 'other'
+  const documentDate = str(d.documentDate)
+  const isTrend = documentType === 'lab_trends'
+
+  const labResults = arr(d.labResults)
+    .map((r) => r as Record<string, unknown>)
+    .filter((r) => str(r.testName))
+    .map((r) => ({
+      testName: str(r.testName)!,
+      value: str(r.value) ?? (num(r.value) !== null ? String(num(r.value)) : ''),
+      unit: str(r.unit),
+      referenceText: str(r.referenceText),
+      flag: str(r.flag),
+      panelName: str(r.panelName),
+      loinc: str(r.loinc),
+      collectedAt: str(r.collectedAt) ?? (!isTrend ? documentDate : null),
+    }))
+
+  const vitals = arr(d.vitals)
+    .map((r) => r as Record<string, unknown>)
+    .filter((r) => str(r.type) && num(r.value) !== null)
+    .map((r) => ({
+      type: str(r.type)!,
+      value: num(r.value),
+      valueSecondary: num(r.valueSecondary),
+      unit: str(r.unit),
+      at: str(r.at) ?? documentDate,
+    }))
+
   return {
-    documentType: str(d.documentType) ?? 'other',
-    documentDate: str(d.documentDate),
+    documentType,
+    documentDate,
     provider: str(d.provider),
     reportTitle: str(d.reportTitle),
     resultsFrom: str(d.resultsFrom),
@@ -211,19 +241,7 @@ function normalize(d: Record<string, unknown>): ExtractedDocument {
     signedAt: str(d.signedAt),
     comparisonNote: str(d.comparisonNote),
     notes: str(d.notes),
-    labResults: arr(d.labResults)
-      .map((r) => r as Record<string, unknown>)
-      .filter((r) => str(r.testName))
-      .map((r) => ({
-        testName: str(r.testName)!,
-        value: str(r.value) ?? (num(r.value) !== null ? String(num(r.value)) : ''),
-        unit: str(r.unit),
-        referenceText: str(r.referenceText),
-        flag: str(r.flag),
-        panelName: str(r.panelName),
-        loinc: str(r.loinc),
-        collectedAt: str(r.collectedAt),
-      })),
+    labResults,
     medications: arr(d.medications)
       .map((r) => r as Record<string, unknown>)
       .filter((r) => str(r.name))
@@ -234,16 +252,7 @@ function normalize(d: Record<string, unknown>): ExtractedDocument {
         frequency: str(r.frequency),
         purpose: str(r.purpose),
       })),
-    vitals: arr(d.vitals)
-      .map((r) => r as Record<string, unknown>)
-      .filter((r) => str(r.type) && num(r.value) !== null)
-      .map((r) => ({
-        type: str(r.type)!,
-        value: num(r.value),
-        valueSecondary: num(r.valueSecondary),
-        unit: str(r.unit),
-        at: str(r.at),
-      })),
+    vitals,
     imagingMeasurements: arr(d.imagingMeasurements)
       .map((r) => r as Record<string, unknown>)
       .filter((r) => str(r.name) && (str(r.value) || num(r.value) !== null))
