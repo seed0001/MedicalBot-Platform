@@ -4,11 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AppGate } from '../components/AppGate'
 import { Modal } from '../components/Modal'
 import { useToast } from '../components/Toast'
-import {
-  SAMPLE_PERSONAS,
-  getPersonaById,
-  type AssistantPersona,
-} from '@medbot/shared'
+import { apiDelete, apiGet, apiPost, ApiError } from '@/lib/api'
+import { SAMPLE_PERSONAS, getPersonaById, type AssistantPersona } from '@medbot/shared'
 
 const PERSONA_STORAGE_KEY = 'medbot_persona'
 
@@ -16,32 +13,19 @@ interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
   text: string
+  actions?: string[]
 }
 
 let messageId = 1
 
-/** First-person greeting in the active persona's voice. */
 function greeting(persona: AssistantPersona): string {
-  return `Hi, I'm ${persona.displayName}. Live conversation is still on the way — it lands in Phase 3. Until then I can point you around: try “+ Log” to record a reading, or head to Assessments for a PHQ-9 or GAD-7. Everything you log starts trending right away.`
-}
-
-/** Honest, varied redirect — never invents clinical content. */
-function redirect(persona: AssistantPersona, turn: number): string {
-  const name = persona.displayName
-  const options = [
-    `I can't hold a real conversation just yet, ${name}'s live chat arrives in Phase 3. What does work today: log a reading with “+ Log” and it starts trending immediately.`,
-    `Not quite yet — my live replies are Phase 3. In the meantime you can take a PHQ-9 or GAD-7 over on the Assessments page and see the score land on your timeline.`,
-    `Real back-and-forth is coming in Phase 3, so I can't answer that one properly. You can still log a blood sugar, blood pressure, or weight reading right now, though.`,
-    `I'm only a preview for now — the conversational part is Phase 3. Try the trends on your dashboard, or update a medication; both are fully working today.`,
-    `Hang tight, live chat is Phase 3. For now: “+ Log” records readings, Assessments runs your questionnaires, and Trends shows how it all moves over time.`,
-  ]
-  return options[turn % options.length]
+  return `Hi, I'm ${persona.displayName}. Tell me how you're doing, or just ask — I can log a reading ("my sugar was 142 before dinner"), add a medication, note that you took a dose, book an appointment, or pull up your trends. What's on your mind?`
 }
 
 const SUGGESTIONS = [
-  'How do I log my blood sugar?',
-  'What can you track?',
-  'Can you take a PHQ-9?',
+  'Log my blood sugar at 132 before dinner',
+  'What medications am I on?',
+  'How has my blood pressure been this week?',
 ]
 
 export default function AssistantPage() {
@@ -50,57 +34,106 @@ export default function AssistantPage() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const turnRef = useRef(0)
+  const [sending, setSending] = useState(false)
+  const [configured, setConfigured] = useState<boolean | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
 
   const persona = getPersonaById(personaId) ?? SAMPLE_PERSONAS[0]
 
-  // Resolve the saved persona on mount and seed the greeting.
+  // Resolve persona + load the saved conversation on mount.
   useEffect(() => {
-    const saved =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem(PERSONA_STORAGE_KEY)
-        : null
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem(PERSONA_STORAGE_KEY) : null
     const resolved = getPersonaById(saved ?? '') ?? SAMPLE_PERSONAS[0]
     setPersonaId(resolved.id)
-    setMessages([{ id: messageId++, role: 'assistant', text: greeting(resolved) }])
+
+    apiGet<{ messages: Array<{ role: string; content: string }>; configured: boolean }>(
+      '/api/assistant/history',
+    )
+      .then((d) => {
+        setConfigured(d.configured)
+        if (d.messages.length) {
+          setMessages(
+            d.messages.map((m) => ({
+              id: messageId++,
+              role: m.role === 'user' ? 'user' : 'assistant',
+              text: m.content,
+            })),
+          )
+        } else {
+          setMessages([{ id: messageId++, role: 'assistant', text: greeting(resolved) }])
+        }
+      })
+      .catch(() => {
+        setConfigured(true)
+        setMessages([{ id: messageId++, role: 'assistant', text: greeting(resolved) }])
+      })
   }, [])
 
   // Keep the log pinned to the newest message.
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
-  }, [messages])
+  }, [messages, sending])
 
-  function send(text: string) {
+  async function send(text: string) {
     const body = text.trim()
-    if (!body) return
-    const turn = turnRef.current++
-    setMessages((prev) => [
-      ...prev,
-      { id: messageId++, role: 'user', text: body },
-      { id: messageId++, role: 'assistant', text: redirect(persona, turn) },
-    ])
+    if (!body || sending) return
+    setMessages((prev) => [...prev, { id: messageId++, role: 'user', text: body }])
     setDraft('')
+    setSending(true)
+    try {
+      const res = await apiPost<{ reply: string; actions: string[]; model: string }>(
+        '/api/assistant/chat',
+        { message: body, personaId },
+      )
+      setConfigured(true)
+      setMessages((prev) => [
+        ...prev,
+        { id: messageId++, role: 'assistant', text: res.reply, actions: res.actions },
+      ])
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 503) {
+        setConfigured(false)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: messageId++,
+            role: 'assistant',
+            text: 'I need OPENROUTER_API_KEY set on the server before I can chat. Everything else in the app works in the meantime.',
+          },
+        ])
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { id: messageId++, role: 'assistant', text: 'Sorry — I had trouble responding. Please try again.' },
+        ])
+        toast.show('Assistant error.', 'err')
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function clearChat() {
+    try {
+      await apiDelete('/api/assistant/history')
+    } catch {
+      /* clearing locally is enough even if the request fails */
+    }
+    setMessages([{ id: messageId++, role: 'assistant', text: greeting(persona) }])
+    toast.show('Conversation cleared.')
   }
 
   function choosePersona(next: AssistantPersona) {
     setPersonaId(next.id)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PERSONA_STORAGE_KEY, next.id)
-    }
+    if (typeof window !== 'undefined') window.localStorage.setItem(PERSONA_STORAGE_KEY, next.id)
     setPickerOpen(false)
-    toast.show(`Now chatting with ${next.displayName}.`, 'ok')
-  }
-
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    send(draft)
+    toast.show(`Now chatting with ${next.displayName}.`)
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      send(draft)
+      void send(draft)
     }
   }
 
@@ -115,37 +148,57 @@ export default function AssistantPage() {
             </p>
           </div>
           <div className="page-actions">
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setPickerOpen(true)}
-            >
+            <button type="button" className="btn-ghost btn-sm" onClick={clearChat}>
+              Clear
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => setPickerOpen(true)}>
               Change persona
             </button>
           </div>
         </div>
 
-        <div className="callout">
-          <strong>Preview</strong> — the assistant's live conversation arrives in
-          Phase 3. Today it can show you around; everything else in the app
-          (logging, assessments, trends, medications) already works.
-        </div>
+        {configured === false && (
+          <div className="callout danger">
+            <strong>Assistant not enabled.</strong>
+            <p>
+              Set <code>OPENROUTER_API_KEY</code> on the API service to turn on live conversation.
+              Everything else in the app works without it.
+            </p>
+          </div>
+        )}
 
         <div className="chat">
           <div className="chat-log" ref={logRef}>
             {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`bubble ${
-                  m.role === 'user' ? 'bubble-user' : 'bubble-assistant'
-                }`}
-              >
-                {m.text}
+              <div key={m.id}>
+                <div className={`bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-assistant'}`}>
+                  {m.text}
+                </div>
+                {m.actions && m.actions.length > 0 && (
+                  <div className="chip-row" style={{ marginTop: '0.35rem' }}>
+                    {m.actions.map((a, i) => (
+                      <span key={i} className="pill">
+                        ✓ {a}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+            {sending && (
+              <div className="bubble bubble-assistant" aria-live="polite">
+                <span className="muted">{persona.displayName} is thinking…</span>
+              </div>
+            )}
           </div>
 
-          <form className="chat-composer" onSubmit={onSubmit}>
+          <form
+            className="chat-composer"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void send(draft)
+            }}
+          >
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -153,8 +206,9 @@ export default function AssistantPage() {
               rows={2}
               placeholder={`Message ${persona.displayName}…`}
               aria-label="Message the assistant"
+              disabled={configured === false}
             />
-            <button type="submit" className="btn-primary" disabled={!draft.trim()}>
+            <button type="submit" className="btn-primary" disabled={!draft.trim() || sending || configured === false}>
               Send
             </button>
           </form>
@@ -166,23 +220,21 @@ export default function AssistantPage() {
               key={s}
               type="button"
               className="chip"
-              onClick={() => send(s)}
+              onClick={() => void send(s)}
+              disabled={sending || configured === false}
             >
               {s}
             </button>
           ))}
         </div>
 
-        <Modal
-          open={pickerOpen}
-          title="Choose a persona"
-          onClose={() => setPickerOpen(false)}
-          wide
-        >
-          <p className="hint">
-            The persona sets tone and style only. Your choice is saved for next
-            time.
-          </p>
+        <p className="hint">
+          The assistant can log and update your records, but it never diagnoses, prescribes, or
+          changes a dose — and it can only draft messages to your care team, never send them.
+        </p>
+
+        <Modal open={pickerOpen} title="Choose a persona" onClose={() => setPickerOpen(false)} wide>
+          <p className="hint">The persona sets tone and style only. Your choice is saved for next time.</p>
           <div className="persona-grid">
             {SAMPLE_PERSONAS.map((p) => (
               <button

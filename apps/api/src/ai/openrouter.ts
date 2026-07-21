@@ -14,9 +14,18 @@ const MODEL_BY_TASK: Record<TaskClass, () => string> = {
   analyze: () => config.MODEL_ANALYZE,
 }
 
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  /** Present on assistant turns that requested tools; echoed back next round. */
+  tool_calls?: ToolCall[]
+  /** Present on tool-result turns, linking back to the call. */
   tool_call_id?: string
   name?: string
 }
@@ -37,7 +46,7 @@ export interface CompletionOptions {
 export interface CompletionResult {
   content: string
   model: string
-  toolCalls: unknown[]
+  toolCalls: ToolCall[]
   usage: { promptTokens: number; completionTokens: number } | null
 }
 
@@ -98,7 +107,7 @@ export async function complete(options: CompletionOptions): Promise<CompletionRe
 
   const json = (await response.json()) as {
     model?: string
-    choices?: Array<{ message?: { content?: string; tool_calls?: unknown[] } }>
+    choices?: Array<{ message?: { content?: string; tool_calls?: ToolCall[] } }>
     usage?: { prompt_tokens?: number; completion_tokens?: number }
   }
 
