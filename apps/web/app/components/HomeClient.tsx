@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { PRODUCT_DESCRIPTION_SHORT } from '@medbot/shared'
 import { API_URL, apiFetch } from '../../lib/api'
 import { TermsModal } from './TermsModal'
 
@@ -127,7 +128,7 @@ export function HomeClient() {
       )}
 
       <h1>MedicalBot</h1>
-      <p className="muted">Personal health management assistant.</p>
+      <p className="muted">{PRODUCT_DESCRIPTION_SHORT}</p>
 
       {signedIn ? (
         <div className="card">

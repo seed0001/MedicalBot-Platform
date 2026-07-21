@@ -1,3 +1,4 @@
+import { PRODUCT_DESCRIPTION_SHORT } from '@medbot/shared'
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { Nav } from './components/Nav'
@@ -6,7 +7,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'MedicalBot',
-  description: 'Personal health management assistant',
+  description: PRODUCT_DESCRIPTION_SHORT,
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
