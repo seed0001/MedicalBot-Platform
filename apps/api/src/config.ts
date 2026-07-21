@@ -40,7 +40,7 @@ const envSchema = z.object({
    * other users. Hardcoded to the initial operator for now; override with the
    * OWNER_EMAIL env var (and eventually manage owners in-app).
    */
-  OWNER_EMAIL: z.string().email().default('travisbollenbach@gmail.com'),
+  OWNER_EMAIL: z.string().trim().toLowerCase().email().default('travisbollenbach@gmail.com'),
 
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
