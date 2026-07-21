@@ -1,4 +1,7 @@
 :root {
+  /* color-scheme makes native controls (select dropdowns, date pickers,
+     checkboxes, scrollbars) render in the right theme instead of always light. */
+  color-scheme: light;
   --bg: #ffffff;
   --fg: #18181b;
   --muted: #71717a;
@@ -10,8 +13,25 @@
   --warn: #b45309;
 }
 
+/* Dark palette. Applied on an explicit dark choice (data-theme="dark") and on a
+   system dark preference — unless the user has explicitly chosen light. The two
+   selectors carry the same values; keep them in sync. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --fg: #fafafa;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --accent: #2dd4bf;
+  --urgent: #f87171;
+  --surface: #131315;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
     --bg: #0a0a0b;
     --fg: #fafafa;
     --muted: #a1a1aa;
@@ -563,14 +583,36 @@ code {
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
+:root[data-theme='dark'] {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.45);
   }
 }
 
 a {
   color: var(--accent);
+}
+
+/* Native form controls follow the theme explicitly, so their text is never
+   black-on-black in dark mode. */
+option {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+input,
+textarea,
+select {
+  color-scheme: inherit;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 /* ---------- app nav (upgraded) ---------- */

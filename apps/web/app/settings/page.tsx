@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { apiGet, apiPatch, apiPost } from '@/lib/api'
 import { AppGate } from '../components/AppGate'
 import { useToast } from '../components/Toast'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { SAMPLE_PERSONAS } from '@medbot/shared'
 
 type Status = { kind: 'idle' } | { kind: 'busy' } | { kind: 'done'; message: string } | { kind: 'error'; message: string }
@@ -183,6 +184,16 @@ function Preferences() {
   return (
     <section>
       <h2>Preferences</h2>
+
+      <div className="card stack">
+        <div>
+          <span className="hint">Appearance</span>
+          <div style={{ marginTop: '0.4rem' }}>
+            <ThemeToggle withLabel />
+          </div>
+          <p className="help-text">Switch between light and dark. Defaults to your device setting.</p>
+        </div>
+      </div>
 
       <div className="card stack">
         <label className="field">

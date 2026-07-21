@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { apiFetch } from '@/lib/api'
 import { Modal } from './Modal'
 import { MetricEntryForm } from './MetricEntryForm'
+import { ThemeToggle } from './ThemeToggle'
 import { useMe } from './useMe'
 
 const LINKS = [
@@ -94,6 +95,7 @@ export function Nav() {
             >
               + Log
             </button>
+            <ThemeToggle />
             <button type="button" className="btn-ghost btn-sm" onClick={() => void signOut()}>
               Sign out
             </button>
