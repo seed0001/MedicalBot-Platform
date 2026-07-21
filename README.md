@@ -9,6 +9,8 @@ see [Safety](#safety) — not just stated in a disclaimer.
 
 The full design is in [SPEC.md](SPEC.md). This README covers running it.
 
+**Collaborating?** See [CONTRIBUTING.md](CONTRIBUTING.md) — pull before you push, use feature branches, rebuild shared packages after pulls.
+
 ## Status
 
 **Phase 1 of 6 — foundation.** Working: monorepo, database schema, Google OAuth login,
