@@ -21,8 +21,10 @@ const createBody = z.object({
 
 const listQuery = z.object({
   type: z.enum(METRIC_TYPES).optional(),
-  days: z.coerce.number().int().min(1).max(365).default(30),
-  limit: z.coerce.number().int().min(1).max(500).default(100),
+  context: z.string().max(120).optional(),
+  /** 0 = all time (no date filter). */
+  days: z.coerce.number().int().min(0).max(3650).default(30),
+  limit: z.coerce.number().int().min(1).max(2000).default(500),
 })
 
 export async function metricRoutes(app: FastifyInstance): Promise<void> {
@@ -81,6 +83,35 @@ export async function metricRoutes(app: FastifyInstance): Promise<void> {
     })
   })
 
+  /** Distinct lab analytes (metrics.context) for charting one test at a time. */
+  app.get('/metrics/lab-analytes', async (request, reply) => {
+    const userId = request.session.userId!
+    const rows = await db
+      .select({
+        name: schema.metrics.context,
+        n: count(),
+        latest: max(schema.metrics.recordedAt),
+        unit: max(schema.metrics.unit),
+      })
+      .from(schema.metrics)
+      .where(
+        and(eq(schema.metrics.userId, userId), eq(schema.metrics.type, 'lab_value')),
+      )
+      .groupBy(schema.metrics.context)
+      .orderBy(desc(count()))
+
+    return reply.send({
+      analytes: rows
+        .filter((r) => r.name)
+        .map((r) => ({
+          name: r.name!,
+          count: Number(r.n),
+          latest: r.latest,
+          unit: r.unit,
+        })),
+    })
+  })
+
   app.get('/metrics', async (request, reply) => {
     const parsed = listQuery.safeParse(request.query)
     if (!parsed.success) {
@@ -88,11 +119,15 @@ export async function metricRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.session.userId!
-    const { type, days, limit } = parsed.data
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    const { type, context, days, limit } = parsed.data
 
-    const filters = [eq(schema.metrics.userId, userId), gte(schema.metrics.recordedAt, since)]
+    const filters = [eq(schema.metrics.userId, userId)]
+    if (days > 0) {
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      filters.push(gte(schema.metrics.recordedAt, since))
+    }
     if (type) filters.push(eq(schema.metrics.type, type))
+    if (context) filters.push(eq(schema.metrics.context, context))
 
     const rows = await db
       .select()

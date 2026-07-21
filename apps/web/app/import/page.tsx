@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AppGate } from '../components/AppGate'
+import { ImportParsingProgress } from '../components/ImportParsingProgress'
 import { useToast } from '../components/Toast'
 import { apiPost, ApiError } from '@/lib/api'
 import { METRIC_LABELS } from '@/lib/format'
@@ -352,12 +353,17 @@ export default function ImportPage() {
 
         {phase === 'parsing' && (
           <div className="card">
-            <p className="hint">Reading {filename}… this can take a few seconds.</p>
+            <ImportParsingProgress filename={filename} />
           </div>
         )}
 
         {(phase === 'review' || phase === 'committing') && meta && (
           <>
+            {phase === 'committing' && (
+              <div className="card">
+                <ImportParsingProgress filename={filename} mode="saving" />
+              </div>
+            )}
             <div className="card">
               <div className="row-between">
                 <div>

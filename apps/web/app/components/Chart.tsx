@@ -5,6 +5,13 @@ export interface Point {
   v: number
 }
 
+export interface ChartSeries {
+  id: string
+  label: string
+  points: Point[]
+  tone?: 'primary' | 'secondary'
+}
+
 /**
  * Small SVG line chart. Hand-rolled rather than pulling a charting library —
  * the whole need here is "plot a series with an optional target band", and this
@@ -12,18 +19,25 @@ export interface Point {
  */
 export function LineChart({
   points,
+  series,
   targetMin,
   targetMax,
   unit,
   height = 180,
 }: {
-  points: Point[]
+  points?: Point[]
+  series?: ChartSeries[]
   targetMin?: number | null
   targetMax?: number | null
   unit?: string | null
   height?: number
 }) {
-  if (points.length < 2) {
+  const lines: ChartSeries[] =
+    series ??
+    (points ? [{ id: 'main', label: '', points, tone: 'primary' }] : [])
+
+  const hasTrend = lines.some((s) => s.points.length >= 2)
+  if (!hasTrend) {
     return <p className="hint">Not enough readings yet to draw a trend.</p>
   }
 
@@ -33,13 +47,12 @@ export function LineChart({
   const padT = 12
   const padB = 26
 
-  const sorted = [...points].sort((a, b) => a.t - b.t)
-  const xs = sorted.map((p) => p.t)
-  const ys = sorted.map((p) => p.v)
+  const allPoints = lines.flatMap((s) => s.points)
+  const xs = allPoints.map((p) => p.t)
+  const ys = allPoints.map((p) => p.v)
 
   const minX = Math.min(...xs)
   const maxX = Math.max(...xs)
-  // Include the target band in the y-range so it is always visible.
   const candidates = [...ys, targetMin, targetMax].filter(
     (n): n is number => typeof n === 'number',
   )
@@ -54,14 +67,14 @@ export function LineChart({
   const y = (v: number) =>
     padT + (1 - (v - minY) / (maxY - minY || 1)) * (height - padT - padB)
 
-  const path = sorted.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.t)} ${y(p.v)}`).join(' ')
-
   const bandTop = typeof targetMax === 'number' ? y(targetMax) : null
   const bandBottom = typeof targetMin === 'number' ? y(targetMin) : null
 
   const ticks = [minY, (minY + maxY) / 2, maxY]
   const fmtDate = (t: number) =>
     new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  const showLegend = lines.length > 1 && lines.some((s) => s.label)
 
   return (
     <div className="chart-wrap">
@@ -85,12 +98,32 @@ export function LineChart({
           </g>
         ))}
 
-        <path d={path} className="chart-line" fill="none" />
-
-        {sorted.length <= 60 &&
-          sorted.map((p) => (
-            <circle key={p.t} cx={x(p.t)} cy={y(p.v)} r={2.5} className="chart-dot" />
-          ))}
+        {lines.map((s) => {
+          if (s.points.length < 2) return null
+          const sorted = [...s.points].sort((a, b) => a.t - b.t)
+          const path = sorted
+            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.t)} ${y(p.v)}`)
+            .join(' ')
+          const lineClass =
+            s.tone === 'secondary' ? 'chart-line chart-line-secondary' : 'chart-line'
+          const dotClass =
+            s.tone === 'secondary' ? 'chart-dot chart-dot-secondary' : 'chart-dot'
+          return (
+            <g key={s.id}>
+              <path d={path} className={lineClass} fill="none" />
+              {sorted.length <= 60 &&
+                sorted.map((p) => (
+                  <circle
+                    key={`${s.id}-${p.t}`}
+                    cx={x(p.t)}
+                    cy={y(p.v)}
+                    r={2.5}
+                    className={dotClass}
+                  />
+                ))}
+            </g>
+          )
+        })}
 
         <text x={padL} y={height - 6} className="chart-label">
           {fmtDate(minX)}
@@ -99,6 +132,20 @@ export function LineChart({
           {fmtDate(maxX)}
         </text>
       </svg>
+      {showLegend && (
+        <div className="chart-legend" aria-hidden="true">
+          {lines.map((s) => (
+            <span key={s.id} className="chart-legend-item">
+              <span
+                className={
+                  s.tone === 'secondary' ? 'chart-legend-swatch secondary' : 'chart-legend-swatch'
+                }
+              />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
       {unit && <p className="hint">Values in {unit}</p>}
     </div>
   )
