@@ -6,13 +6,24 @@ import { config, openRouterConfigured } from '../config.js'
  * use is small enough that a fetch wrapper is less code than adapting a SDK.
  */
 
-export type TaskClass = 'chat' | 'extract' | 'analyze'
+export type TaskClass = 'chat' | 'extract' | 'analyze' | 'vision'
 
 const MODEL_BY_TASK: Record<TaskClass, () => string> = {
   chat: () => config.MODEL_CHAT,
   extract: () => config.MODEL_EXTRACT,
   analyze: () => config.MODEL_ANALYZE,
+  vision: () => config.MODEL_VISION,
 }
+
+/**
+ * Multimodal content parts. A message's content is either plain text or an array
+ * of parts — text plus an image (data URL) or a PDF `file` part, which is how the
+ * document parser hands scans and reports to a vision-capable model.
+ */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'file'; file: { filename: string; file_data: string } }
 
 export interface ToolCall {
   id: string
@@ -22,7 +33,7 @@ export interface ToolCall {
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  content: string | ContentPart[]
   /** Present on assistant turns that requested tools; echoed back next round. */
   tool_calls?: ToolCall[]
   /** Present on tool-result turns, linking back to the call. */
