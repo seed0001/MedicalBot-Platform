@@ -5,13 +5,17 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 export async function apiFetch(path: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers)
+  // Only advertise a JSON body when we actually send one. A POST that declares
+  // application/json with an empty body is rejected with 400 by the server —
+  // that was silently breaking Terms acceptance and logout.
+  if (init?.body != null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
   return fetch(`${API_URL}${path}`, {
     ...init,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
+    headers,
   })
 }
 

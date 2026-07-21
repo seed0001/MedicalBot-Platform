@@ -58,6 +58,25 @@ await app.register(session, {
   saveUninitialized: false,
 })
 
+// Treat an empty application/json body as {} instead of 400. Bodyless action
+// POSTs (accept terms, logout, adherence) are legitimate; the default parser
+// rejecting them was making Terms acceptance loop forever.
+app.addContentTypeParser(
+  'application/json',
+  { parseAs: 'string' },
+  (_req, body, done) => {
+    const text = (body as string).trim()
+    if (text === '') return done(null, {})
+    try {
+      done(null, JSON.parse(text))
+    } catch {
+      const err = new Error('Invalid JSON') as Error & { statusCode?: number }
+      err.statusCode = 400
+      done(err, undefined)
+    }
+  },
+)
+
 app.get('/health', async () => {
   const dbOk = await pingDb()
   return {
