@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppGate } from '../components/AppGate'
 import { Modal } from '../components/Modal'
 import { useToast } from '../components/Toast'
+import { useMe } from '../components/useMe'
 import { apiDelete, apiGet, apiPost, ApiError } from '@/lib/api'
 import { SAMPLE_PERSONAS, getPersonaById, type AssistantPersona } from '@medbot/shared'
 
@@ -28,15 +29,31 @@ const SUGGESTIONS = [
   'How has my blood pressure been this week?',
 ]
 
+interface Diagnostics {
+  configured?: boolean
+  ok?: boolean
+  message?: string
+  chatModel?: string
+  respondedAs?: string
+  sample?: string
+  detail?: string
+  status?: number
+}
+
 export default function AssistantPage() {
   const toast = useToast()
+  const me = useMe()
   const [personaId, setPersonaId] = useState('maya')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [sending, setSending] = useState(false)
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [diag, setDiag] = useState<Diagnostics | null>(null)
+  const [testing, setTesting] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
+
+  const isAdmin = me.status === 'signed-in' && me.me.isAdmin
 
   const persona = getPersonaById(personaId) ?? SAMPLE_PERSONAS[0]
 
@@ -102,14 +119,43 @@ export default function AssistantPage() {
           },
         ])
       } else {
+        // Surface the real reason the server reported (bad key, no credits,
+        // wrong model…) instead of a generic apology.
+        const detail =
+          e instanceof ApiError && e.body && typeof e.body === 'object' && 'error' in e.body
+            ? String((e.body as { error?: unknown }).error)
+            : null
         setMessages((prev) => [
           ...prev,
-          { id: messageId++, role: 'assistant', text: 'Sorry — I had trouble responding. Please try again.' },
+          {
+            id: messageId++,
+            role: 'assistant',
+            text: detail ?? 'Sorry — I had trouble responding. Please try again.',
+          },
         ])
         toast.show('Assistant error.', 'err')
       }
     } finally {
       setSending(false)
+    }
+  }
+
+  async function testConnection() {
+    setTesting(true)
+    setDiag(null)
+    try {
+      const r = await apiGet<Diagnostics>('/api/assistant/diagnostics')
+      setDiag(r)
+    } catch (e) {
+      setDiag({
+        ok: false,
+        message:
+          e instanceof ApiError && e.status === 403
+            ? 'Only an admin/owner can run the connection test.'
+            : 'Could not run the connection test.',
+      })
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -148,6 +194,16 @@ export default function AssistantPage() {
             </p>
           </div>
           <div className="page-actions">
+            {isAdmin && (
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                onClick={() => void testConnection()}
+                disabled={testing}
+              >
+                {testing ? 'Testing…' : 'Test connection'}
+              </button>
+            )}
             <button type="button" className="btn-ghost btn-sm" onClick={clearChat}>
               Clear
             </button>
@@ -164,6 +220,23 @@ export default function AssistantPage() {
               Set <code>OPENROUTER_API_KEY</code> on the API service to turn on live conversation.
               Everything else in the app works without it.
             </p>
+          </div>
+        )}
+
+        {diag && (
+          <div className={`callout ${diag.ok ? '' : 'danger'}`}>
+            <strong>{diag.ok ? 'Connection OK' : 'Connection problem'}</strong>
+            <p>
+              {diag.ok
+                ? `${diag.respondedAs ?? diag.chatModel ?? 'The model'} responded${diag.sample ? ` — “${diag.sample}”` : ''}.`
+                : diag.message}
+            </p>
+            {diag.chatModel && (
+              <p className="hint">
+                Configured chat model: <code>{diag.chatModel}</code>
+              </p>
+            )}
+            {diag.detail && <p className="hint">{diag.detail}</p>}
           </div>
         )}
 
