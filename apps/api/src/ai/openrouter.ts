@@ -72,6 +72,28 @@ export class OpenRouterError extends Error {
   }
 }
 
+/**
+ * Plain-language explanation of an OpenRouter failure, so the UI can tell the
+ * user what to actually fix instead of a generic "couldn't respond".
+ */
+export function describeOpenRouterError(err: OpenRouterError): string {
+  const snippet = err.body ? ` (${err.body.slice(0, 200)})` : ''
+  switch (err.status) {
+    case 401:
+      return 'OpenRouter rejected the API key. Check that OPENROUTER_API_KEY is correct.'
+    case 402:
+      return 'Your OpenRouter account is out of credits. Add credits at openrouter.ai/credits.'
+    case 403:
+      return `OpenRouter denied the request — the key may not have access to this model.${snippet}`
+    case 404:
+      return `The configured model was not found on OpenRouter. Check your MODEL_CHAT / MODEL_* values.${snippet}`
+    case 429:
+      return 'OpenRouter rate-limited the request. Wait a moment and try again.'
+    default:
+      return `OpenRouter error ${err.status}.${snippet}`
+  }
+}
+
 export async function complete(options: CompletionOptions): Promise<CompletionResult> {
   if (!openRouterConfigured) {
     throw new OpenRouterError('OPENROUTER_API_KEY is not set', 500, '')

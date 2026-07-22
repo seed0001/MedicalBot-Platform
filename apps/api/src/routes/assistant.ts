@@ -1,11 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import { asc, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { openRouterConfigured } from '../config.js'
+import { config, openRouterConfigured } from '../config.js'
 import { db, schema } from '../db/index.js'
 import { runAgent } from '../ai/agent.js'
-import type { ChatMessage } from '../ai/openrouter.js'
-import { requireUser } from './auth.js'
+import {
+  complete,
+  describeOpenRouterError,
+  OpenRouterError,
+  type ChatMessage,
+} from '../ai/openrouter.js'
+import { requireAdmin, requireUser } from './auth.js'
 
 /**
  * Conversational assistant (SPEC §4). Each turn assembles context, runs the
@@ -84,8 +89,55 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.send({ reply: turn.reply, actions: turn.actions, model: turn.model })
     } catch (err) {
+      if (err instanceof OpenRouterError) {
+        // Log the full provider response, and tell the user what to actually fix.
+        request.log.error({ status: err.status, body: err.body }, 'OpenRouter call failed')
+        return reply.code(502).send({ error: describeOpenRouterError(err) })
+      }
       request.log.error({ err: err instanceof Error ? err.message : 'unknown' }, 'Assistant turn failed')
       return reply.code(502).send({ error: 'The assistant had trouble responding. Please try again.' })
+    }
+  })
+
+  // Owner/admin connection test: does a minimal live call and reports the exact
+  // outcome (which model, or the precise provider error) so misconfiguration is
+  // obvious without reading server logs.
+  app.get('/assistant/diagnostics', { preHandler: requireAdmin }, async (request, reply) => {
+    if (!openRouterConfigured) {
+      return reply.send({ configured: false, ok: false, message: 'OPENROUTER_API_KEY is not set.' })
+    }
+    try {
+      const res = await complete({
+        task: 'chat',
+        messages: [{ role: 'user', content: 'Reply with just: ok' }],
+        maxTokens: 5,
+        temperature: 0,
+      })
+      return reply.send({
+        configured: true,
+        ok: true,
+        chatModel: config.MODEL_CHAT,
+        respondedAs: res.model,
+        sample: res.content.slice(0, 80),
+      })
+    } catch (err) {
+      if (err instanceof OpenRouterError) {
+        request.log.error({ status: err.status, body: err.body }, 'Assistant diagnostics failed')
+        return reply.send({
+          configured: true,
+          ok: false,
+          status: err.status,
+          chatModel: config.MODEL_CHAT,
+          message: describeOpenRouterError(err),
+          detail: err.body?.slice(0, 300),
+        })
+      }
+      return reply.send({
+        configured: true,
+        ok: false,
+        chatModel: config.MODEL_CHAT,
+        message: err instanceof Error ? err.message : 'unknown error',
+      })
     }
   })
 }
