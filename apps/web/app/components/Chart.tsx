@@ -189,7 +189,7 @@ export function LineChart({
           role="tooltip"
         >
           <strong>{formatValue(tip.value, tip.label)}</strong>
-          <span>{formatDateTime(tip.t)}</span>
+          <span>{formatDateTime(new Date(tip.t))}</span>
         </div>
       )}
 
