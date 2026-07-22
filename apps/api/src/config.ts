@@ -45,16 +45,19 @@ const envSchema = z.object({
    */
   OWNER_EMAIL: z.string().trim().toLowerCase().email().default('travisbollenbach@gmail.com'),
 
-  OPENROUTER_API_KEY: z.string().optional(),
-  OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
+  // Trimmed: a trailing space/newline pasted into a Railway variable would be
+  // sent verbatim and rejected by OpenRouter (a stray space on the key reads as
+  // 401; on a model ID as "not a valid model ID").
+  OPENROUTER_API_KEY: z.string().trim().optional(),
+  OPENROUTER_BASE_URL: z.string().trim().url().default('https://openrouter.ai/api/v1'),
 
   // Model routing by task class — see SPEC.md §4.1. Swappable without a deploy.
-  MODEL_CHAT: z.string().default('anthropic/claude-sonnet-4.5'),
-  MODEL_EXTRACT: z.string().default('anthropic/claude-haiku-4.5'),
-  MODEL_ANALYZE: z.string().default('anthropic/claude-sonnet-4.5'),
+  MODEL_CHAT: z.string().trim().default('anthropic/claude-sonnet-4.5'),
+  MODEL_EXTRACT: z.string().trim().default('anthropic/claude-haiku-4.5'),
+  MODEL_ANALYZE: z.string().trim().default('anthropic/claude-sonnet-4.5'),
   // Multimodal model for reading uploaded lab reports, prescriptions, and scans.
   // Must accept images and PDFs.
-  MODEL_VISION: z.string().default('anthropic/claude-sonnet-4.5'),
+  MODEL_VISION: z.string().trim().default('anthropic/claude-sonnet-4.5'),
 })
 
 const parsed = envSchema.safeParse(process.env)
